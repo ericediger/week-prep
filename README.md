@@ -4,6 +4,8 @@ A single-file, local-first weekly to-do app. Drop your week's raw material — m
 
 No server, no build step, no account. One HTML file, your files stay in your folder, and the only network call is to the Anthropic API when you ask it to read a week.
 
+**[▶ Try the live demo](https://ericediger.github.io/week-prep/demo.html)** — the full app pre-loaded with a fictional week of sample data. No setup, no API key, nothing saved; click into the week, expand items, poke around.
+
 ## How it works
 
 ```

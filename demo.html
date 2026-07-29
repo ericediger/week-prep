@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly To-Do — demo</title>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2024; --muted:#6b7280;
+    --line:#e6e8eb; --accent:#2f6f4f; --accentbg:#eaf4ee; --accentline:#bcdcc9;
+    --hi:#b3261e; --hibg:#fdecea; --med:#9a6a00; --medbg:#fdf3e0; --low:#3a6ea5; --lowbg:#eaf1f8;
+    --done:#9aa0a6; --ctxbg:#fbfaf6; --carry:#9a6a00; --carrybg:#fdf3e0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;padding:0 0 60px}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+  a{color:inherit}
+
+  /* connect bar */
+  .bar{position:sticky;top:0;z-index:30;background:rgba(246,247,249,.92);backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);padding:9px 20px;margin-bottom:22px}
+  .barin{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .dot{width:9px;height:9px;border-radius:50%;background:#cdd2d8;flex:none}
+  .dot.on{background:var(--accent)} .dot.off{background:var(--hi)}
+  .barmsg{font-size:12.5px;color:var(--muted)}
+  .bar .spacer{flex:1}
+  .saved{font-size:12px;color:var(--accent);opacity:0;transition:opacity .3s} .saved.show{opacity:1}
+  button.conn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
+  button.conn.ghost{background:var(--card);color:var(--accent);border:1px solid var(--accentline)}
+
+  h1{font-size:23px;margin:0}
+  .crumbs{font-size:12.5px;color:var(--muted);margin-bottom:18px}
+  .crumbs a{color:var(--accent);text-decoration:none} .crumbs a:hover{text-decoration:underline}
+  .secLbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:24px 0 10px;font-weight:600}
+
+  /* hero */
+  .hero{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px;
+    display:flex;gap:24px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:8px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--accent)}
+  .hero .left{min-width:240px}
+  .hero .tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent);background:var(--accentbg);border:1px solid var(--accentline);border-radius:20px;padding:3px 11px;margin-bottom:10px}
+  .hero h2{margin:0 0 3px;font-size:21px}
+  .hero .dates{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+  .openbtn{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;text-decoration:none;border:none;
+    border-radius:10px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer}
+  .openbtn:hover{background:#275f43}
+  .tiles{display:flex;gap:12px;flex-wrap:wrap}
+  .tile{background:#fbfbfc;border:1px solid var(--line);border-radius:12px;padding:13px 16px;min-width:84px;text-align:center}
+  .tile .n{font-size:24px;font-weight:680;line-height:1}
+  .tile .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:5px}
+  .tile.hi .n{color:var(--hi)} .tile.soon .n{color:var(--med)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .wcard{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:16px 17px;cursor:pointer;display:block;transition:border-color .15s,transform .05s}
+  .wcard:hover{border-color:var(--accentline);transform:translateY(-1px)}
+  .wcard h3{margin:0 0 2px;font-size:15.5px}
+  .wcard .d{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+  .wcard .mini{display:flex;gap:14px}
+  .wcard .mini div{font-size:12px;color:var(--muted)}
+  .wcard .mini b{display:block;font-size:17px;color:var(--ink);font-weight:650}
+  .wcard .bar2{height:6px;border-radius:4px;background:#eef0f2;margin-top:13px;overflow:hidden}
+  .wcard .bar2 i{display:block;height:100%;background:var(--accent);border-radius:4px}
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:13px;padding:26px;color:var(--muted);font-size:13.5px;text-align:center}
+  .ingest{background:#fff8e8;border:1px solid #f0dca0;border-radius:13px;padding:15px 18px;margin-bottom:20px}
+  .ingest .ingtxt{font-size:14px;color:#5a4a1a}
+  .ingest .inghint{font-size:12px;color:#8a7a45;margin-top:3px}
+  .ingest .ingrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:11px}
+  .ingest .ingbtn{background:#b5722a;border-color:#b5722a;padding:8px 15px}
+  .ingest .ingbtn:hover{background:#9a601f}
+  .ingest .ingbtn:disabled{opacity:.55;cursor:default}
+  .ingest .ingstatus{font-size:12.5px;color:#5a4a1a}
+
+  /* week view table */
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+  .controls .grp{display:flex;gap:6px;flex-wrap:wrap}
+  button.f{background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:5px 12px;font-size:12.5px;cursor:pointer}
+  button.f.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.add{background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:20px;padding:6px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .controls .spacer{flex:1}
+  input.search{border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:13px;min-width:170px;background:var(--card);color:var(--ink)}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 13px;min-width:84px}
+  .stat .n{font-size:19px;font-weight:650} .stat .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  thead th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:11px 10px;border-bottom:1px solid var(--line);background:#fbfbfc;cursor:pointer;user-select:none;white-space:nowrap}
+  thead th .ar{opacity:.4;font-size:10px}
+  tbody td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr.main:last-child td{border-bottom:none}
+  tbody tr.done .item,tbody tr.notdoing .item{text-decoration:line-through;color:var(--done)}
+  tbody tr.done .detail,tbody tr.notdoing .detail{color:var(--done)}
+  .chk{width:18px;height:18px;cursor:pointer;accent-color:var(--accent)}
+  .itemcell{min-width:260px}
+  .itemtop{display:flex;align-items:flex-start;gap:7px}
+  .exp{background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted);padding:2px 3px;line-height:1;margin-top:2px;transition:transform .15s}
+  .exp.open{transform:rotate(90deg)}
+  .item{font-weight:600}
+  .sub{margin-left:22px;margin-top:3px}
+  .cat{font-size:11px;color:var(--muted)}
+  .carry{display:inline-block;font-size:10px;font-weight:600;color:var(--carry);background:var(--carrybg);border:1px solid #eedcae;border-radius:10px;padding:1px 7px;margin-left:6px}
+  .detail{color:#3c4147;font-size:13.5px;min-width:320px}
+  .due{white-space:nowrap;font-size:13px} .due.soon{color:var(--hi);font-weight:600}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;white-space:nowrap}
+  .p-High{background:var(--hibg);color:var(--hi)} .p-Medium{background:var(--medbg);color:var(--med)} .p-Low{background:var(--lowbg);color:var(--low)}
+  select.prio{border:1px solid transparent;font-weight:600;border-radius:20px;padding:3px 9px;font-size:11.5px;cursor:pointer;font-family:inherit}
+  select.plan,input.notes{border:1px solid var(--line);border-radius:7px;padding:5px 7px;font-size:12.5px;background:var(--card);color:var(--ink);font-family:inherit}
+  select.plan{min-width:104px} select.plan.set{background:var(--accentbg);border-color:var(--accentline);color:var(--accent);font-weight:600}
+  select.plan.nd{background:#f0f0f1;border-color:#d8d9dc;color:var(--done);font-weight:600;text-decoration:line-through}
+  input.notes{width:100%;min-width:130px}
+  .detailrow td{background:var(--ctxbg);padding:0 10px}
+  .ctxwrap{padding:12px 14px 14px 32px;font-size:13px;color:#3c4147;line-height:1.55}
+  .ctxwrap .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 5px}
+  .ctxwrap .srcline{margin-top:9px;font-size:11.5px;color:var(--muted)}
+  .ctxwrap .delwrap{margin-top:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ctxwrap .delwrap .lbl2{font-size:11.5px;color:var(--muted)}
+  .delreason{border:1px solid var(--line);border-radius:7px;padding:4px 8px;font-size:12px;background:var(--card);color:var(--ink);font-family:inherit}
+  .del{background:none;border:1px solid var(--line);color:var(--hi);border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer} .del:hover{background:var(--hibg)}
+  .empty2{padding:26px;text-align:center;color:var(--muted)}
+  .tray{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+  .tray summary{cursor:pointer;font-size:13px;font-weight:600;list-style:none} .tray summary::-webkit-details-marker{display:none}
+  .tray summary .cnt{color:var(--muted);font-weight:500}
+  .tray .row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .tray .row:last-of-type{border-bottom:none}
+  .tray .row .why{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .restore{background:none;border:1px solid var(--line);border-radius:7px;padding:3px 10px;font-size:12px;cursor:pointer} .restore:hover{background:var(--accentbg)}
+
+  /* projects */
+  select.proj,select.theme{border:1px solid var(--line);border-radius:20px;padding:3px 8px;font-size:11.5px;font-weight:600;font-family:inherit;cursor:pointer;max-width:140px}
+  .tpcell select{display:block;margin:0 0 4px} .tpcell select:last-child{margin-bottom:0}
+  .pchip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px}
+  .pdot{width:8px;height:8px;border-radius:50%;flex:none}
+  /* persistent project chip bar + theme chips */
+  #pbar{max-width:1180px;margin:9px auto 0;padding-top:9px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;overflow-x:auto}
+  .pchips{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .pchipbtn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);flex:none}
+  .pchipbtn:hover{border-color:var(--accentline)}
+  .pchipbtn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pcount{background:rgba(0,0,0,.10);border-radius:10px;padding:0 6px;font-size:11px}
+  .pchipbtn.on .pcount{background:rgba(255,255,255,.25)}
+  .pbardiv{width:1px;height:18px;background:var(--line);flex:none}
+  .projF{border:1px solid var(--line);border-radius:20px;padding:5px 11px;font-size:12.5px;background:var(--card);color:var(--ink);font-family:inherit;cursor:pointer}
+  .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .pcard{background:var(--card);border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:13px 15px;cursor:pointer;transition:transform .05s,border-color .15s}
+  .pcard:hover{transform:translateY(-1px)}
+  .pcard h4{margin:0;font-size:13px;letter-spacing:.04em}
+  .pcard .pn{font-size:12.5px;color:var(--muted);margin:2px 0 9px}
+  .puid{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:.02em}
+  .pcard .pc{font-size:12px;color:var(--muted)} .pcard .pc b{color:var(--ink);font-size:15px}
+  .phead{background:var(--card);border:1px solid var(--line);border-left-width:5px;border-radius:14px;padding:18px 20px;margin-bottom:16px}
+  .phead h1{font-size:21px;margin:0 0 2px} .phead .pid{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+  .phead .blurb{font-size:13.5px;color:#3c4147;margin:8px 0 0;line-height:1.55}
+  .llmbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}
+  .llmbar .lk{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .llmbar input{border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12.5px;font-family:inherit;background:var(--card);color:var(--ink)}
+  .llmbar a{font-size:12.5px;color:var(--accent)}
+  .brief{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer} .brief:hover{background:#275f43}
+  .wkbadge{display:inline-block;font-size:10.5px;color:var(--muted);background:#f0f1f3;border-radius:8px;padding:1px 7px}
+  .editp{background:none;border:1px solid var(--line);border-radius:7px;padding:3px 11px;font-size:12px;cursor:pointer;color:var(--muted)} .editp:hover{background:#f0f1f3}
+  .subbadge{display:inline-block;font-size:10.5px;font-weight:600;color:var(--muted);background:#eef0f2;border-radius:10px;padding:1px 7px;margin-left:8px;vertical-align:middle}
+  .subbadge.alldone{color:var(--accent);background:var(--accentbg)}
+  .subsec{margin-top:11px;padding-top:11px;border-top:1px solid var(--line)}
+  .strow{display:flex;align-items:center;gap:8px;padding:4px 0}
+  .strow .stchk{width:15px;height:15px;cursor:pointer;accent-color:var(--accent);flex:none}
+  .strow .sttext{flex:1;font-size:13px}
+  .strow.stdone .sttext{text-decoration:line-through;color:var(--done)}
+  .stpromote{background:none;border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:11px;color:var(--accent);cursor:pointer;opacity:.7} .stpromote:hover{opacity:1;background:var(--accentbg)}
+  .stdel{background:none;border:none;color:var(--muted);font-size:15px;line-height:1;cursor:pointer;padding:0 4px} .stdel:hover{color:var(--hi)}
+  .staddrow{display:flex;gap:7px;margin-top:6px}
+  .stadd{flex:1;border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:12.5px;font-family:inherit;background:var(--card);color:var(--ink)}
+  .staddbtn{background:var(--accentbg);border:1px solid var(--accentline);color:var(--accent);border-radius:7px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+  .pm-delzone{margin-top:6px;padding-top:13px;border-top:1px solid var(--line)}
+  input[readonly]{background:#f3f4f6;color:var(--muted)}
+
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(20,24,28,.45);display:none;align-items:flex-start;justify-content:center;padding:60px 16px;z-index:50}
+  .modal.show{display:flex}
+  .sheet{background:var(--card);border-radius:14px;width:100%;max-width:520px;padding:22px;box-shadow:0 16px 40px rgba(0,0,0,.2)}
+  .sheet h2{margin:0 0 14px;font-size:17px}
+  .field{margin-bottom:12px} .field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+  .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;font-family:inherit;background:var(--card);color:var(--ink)}
+  .field textarea{min-height:60px;resize:vertical}
+  .row2{display:flex;gap:10px}.row2>div{flex:1}
+  .sheetbtns{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+  .btn-cancel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px}
+  .btn-save{background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600}
+  .gate{max-width:640px;margin:40px auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px}
+  .gate h2{margin:0 0 8px;font-size:19px}
+  .gate p{font-size:13.5px;color:#3c4147;margin:8px 0}
+  .gate .big{font-size:14px;margin-top:16px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="barin">
+    <span class="dot" id="dot"></span>
+    <span class="barmsg" id="barmsg">Not connected</span>
+    <span class="saved" id="saved">saved</span>
+    <button class="conn ghost" id="homeBtn" title="Home">Home</button>
+    <button class="conn ghost" id="projBtn" title="All projects">Projects</button>
+    <span class="spacer"></span>
+    <button class="conn ghost" id="setBtn" title="AI ingest settings">⚙ AI</button>
+    <button class="conn ghost" id="connBtn">Connect folder</button>
+  </div>
+  <div id="pbar" style="display:none"></div>
+</div>
+
+<div class="wrap" id="app"></div>
+
+<!-- add item modal -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h2 id="m_title">Add an item</h2>
+    <div class="field"><label>Item</label><input id="m_item" placeholder="Short title"></div>
+    <div class="field"><label>Detail</label><textarea id="m_detail" placeholder="What needs to happen"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>Due date</label><input id="m_due" type="date"></div>
+      <div class="field"><label>Priority</label><select id="m_prio"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Theme</label><select id="m_theme"></select></div>
+      <div class="field"><label>Project</label><select id="m_proj"></select></div>
+    </div>
+    <div class="field"><label>Category (optional)</label><input id="m_cat" placeholder="e.g. Ad-hoc"></div>
+    <div class="field"><label>Context (optional)</label><textarea id="m_ctx" placeholder="More color / background"></textarea></div>
+    <div class="sheetbtns"><button class="btn-cancel" id="m_cancel">Cancel</button><button class="btn-save" id="m_save">Save item</button></div>
+  </div>
+</div>
+
+<!-- project create/edit modal -->
+<div class="modal" id="pmodal">
+  <div class="sheet">
+    <h2 id="pm_title">New project</h2>
+    <div id="pm_uidline" style="display:none;font-size:12px;color:var(--muted);margin:-8px 0 12px">Reference ID: <b id="pm_uidval" style="font-family:ui-monospace,Menlo,monospace;color:var(--ink)"></b></div>
+    <div class="row2">
+      <div class="field"><label>ID (short code)</label><input id="pm_id" placeholder="e.g. ACAI"></div>
+      <div class="field"><label>Prefix (for reference ID)</label><input id="pm_prefix" placeholder="e.g. ACME"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Name</label><input id="pm_name" placeholder="Readable name"></div>
+      <div class="field"><label>Color</label><input id="pm_color" type="color" value="#2f6f4f"></div>
+    </div>
+    <div class="field"><label>Standing context (optional)</label><textarea id="pm_blurb" placeholder="One paragraph the LLM brief will include"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>LLM tool</label><input id="pm_tool" placeholder="Claude, ChatGPT…"></div>
+      <div class="field"><label>Chat / project name</label><input id="pm_lname"></div>
+    </div>
+    <div class="field"><label>Link (optional)</label><input id="pm_link" placeholder="https://…"></div>
+    <div class="field"><label>Keywords (optional, comma-separated — used to auto-tag future weeks)</label><input id="pm_kw" placeholder="acai, exchange agent, msa"></div>
+    <div class="pm-delzone" id="pm_delzone" style="display:none">
+      <div class="field"><label>Delete — reassign its items to</label><select id="pm_reassign"></select></div>
+      <button class="del" id="pm_delete">Delete this project</button>
+    </div>
+    <div class="sheetbtns"><button class="btn-cancel" id="pm_cancel">Cancel</button><button class="btn-save" id="pm_save">Save project</button></div>
+  </div>
+</div>
+
+<!-- theme create/edit modal -->
+<div class="modal" id="tmodal">
+  <div class="sheet">
+    <h2 id="tm_title">New theme</h2>
+    <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 14px">A high-level area or department — e.g. Legal, Gov, Marketing, Sales. Work from several themes can roll up under one project.</p>
+    <div class="row2">
+      <div class="field"><label>ID (short code)</label><input id="tm_id" placeholder="e.g. LEGAL"></div>
+      <div class="field"><label>Color</label><input id="tm_color" type="color" value="#6b7280"></div>
+    </div>
+    <div class="field"><label>Name</label><input id="tm_name" placeholder="Readable name"></div>
+    <div class="field"><label>Standing context (optional)</label><textarea id="tm_blurb" placeholder="One-line description of this area"></textarea></div>
+    <div class="field"><label>Keywords (optional, comma-separated — used to auto-tag future weeks)</label><input id="tm_kw" placeholder="legal, contract, msa"></div>
+    <div class="pm-delzone" id="tm_delzone" style="display:none">
+      <div class="field"><label>Delete — reassign its items to</label><select id="tm_reassign"></select></div>
+      <button class="del" id="tm_delete">Delete this theme</button>
+    </div>
+    <div class="sheetbtns"><button class="btn-cancel" id="tm_cancel">Cancel</button><button class="btn-save" id="tm_save">Save theme</button></div>
+  </div>
+</div>
+
+<!-- AI ingest settings modal -->
+<div class="modal" id="setmodal">
+  <div class="sheet">
+    <h2>AI ingest settings</h2>
+    <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px">Used to read a new week's emails/notes and build its to-do list automatically. Your key is stored <b>only in this browser</b> — it is never written into the synced folder.</p>
+    <div class="field"><label>Anthropic API key</label><input id="set_key" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
+    <div class="field"><label>Model</label><input id="set_model" placeholder="claude-fable-5"></div>
+    <div class="field"><label>About you (optional — helps the AI spot which action items are yours)</label><textarea id="set_persona" placeholder="e.g. Jane, a product director at Acme Corp"></textarea></div>
+    <div style="display:flex;align-items:center;gap:12px;margin:4px 0 8px">
+      <button class="btn-save" id="set_test" style="background:var(--card);color:var(--accent);border:1px solid var(--accentline)">Test connection</button>
+      <span id="set_result" style="font-size:12.5px"></span>
+    </div>
+    <div class="sheetbtns"><button class="btn-cancel" id="set_cancel">Close</button><button class="btn-save" id="set_save">Save</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PLAN_OPTS=["","Mon","Tue","Wed","Thu","Fri","Next wk","Done","Not doing"];
+const PLAN_RANK={"Mon":0,"Tue":1,"Wed":2,"Thu":3,"Fri":4,"Next wk":5,"Done":6,"Not doing":7,"":9};
+const PRIO_RANK={High:0,Medium:1,Low:2};
+const DISMISS_REASONS=["Not relevant","Already handled","Not my task","Duplicate","Misread / wrong","Other"];
+
+const app={ root:null, weeks:[], view:{}, projects:[], projById:{}, themes:[], themeById:{}, pending:[] };
+const $=id=>document.getElementById(id);
+
+/* ---------- tiny IndexedDB store for the folder handle ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("weektodo",1);
+  r.onupgradeneeded=()=>r.result.createObjectStore("kv");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function idbSet(k,v){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction("kv","readwrite");t.objectStore("kv").put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function idbGet(k){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction("kv","readonly");const q=t.objectStore("kv").get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+
+/* ---------- connection ---------- */
+function setStatus(state,msg){
+  $('dot').className="dot "+(state||"");
+  $('barmsg').textContent=msg;
+  $('connBtn').textContent = state==="on" ? "Reconnect" : "Connect folder";
+  $('connBtn').className = "conn "+(state==="on"?"ghost":"");
+}
+async function verify(handle){
+  const o={mode:"readwrite"};
+  if((await handle.queryPermission(o))==="granted") return true;
+  if((await handle.requestPermission(o))==="granted") return true;
+  return false;
+}
+async function connect(){
+  if(!window.showDirectoryPicker){ alert("This needs Chrome or Edge. Please open Home.html there."); return; }
+  try{
+    const handle=await window.showDirectoryPicker({mode:"readwrite",id:"weekprep"});
+    if(!(await verify(handle))){ setStatus("off","Permission denied"); return; }
+    app.root=handle; await idbSet("rootHandle",handle);
+    await loadAll(); route();
+  }catch(e){ if(e&&e.name==="AbortError") return; console.error(e); setStatus("off","Could not connect: "+(e.message||e)); }
+}
+async function tryRestore(){
+  try{
+    const handle=await idbGet("rootHandle");
+    if(!handle) return false;
+    if((await handle.queryPermission({mode:"readwrite"}))!=="granted"){
+      setStatus("","Folder remembered — click Reconnect"); return false;
+    }
+    app.root=handle; await loadAll(); return true;
+  }catch(e){ return false; }
+}
+async function loadProjects(){
+  let data=null;
+  try{
+    const fh=await app.root.getFileHandle("projects.json");
+    data=JSON.parse(await (await fh.getFile()).text());
+  }catch(e){ data=null; }
+  app._migrating=false;
+  if(data){
+    app._projMeta={schema:data.schema, note:data.note};
+    if(!(data.schema>=2)){
+      // one-time migration: the old "projects" were really themes (Legal, Gov…)
+      app._migrating=true;
+      app.themes=(data.projects||[]).map(p=>({id:p.id, name:p.name||p.id, color:p.color||'#6b7280', blurb:p.blurb||'', keywords:p.keywords||[]}));
+      app.projects=[];
+    } else {
+      app.themes=data.themes||[]; app.projects=data.projects||[];
+    }
+  } else { app._projMeta={}; app.themes=[]; app.projects=[]; }
+  app.projById={}; app.projects.forEach(p=>app.projById[p.id]=p);
+  app.themeById={}; app.themes.forEach(t=>app.themeById[t.id]=t);
+  // backfill a permanent reference ID (PREFIX-YYMMDD-NNN) for any rich project missing one
+  let dirty=false;
+  app.projects.forEach(p=>{ if(!p.uid){ p.prefix=p.prefix||p.id; p.uid=makeUid(p.prefix); dirty=true; } });
+  if(dirty && app.root && !app._migrating) await saveProjects();
+}
+async function saveProjects(){
+  try{
+    const out={schema:2, updated:new Date().toISOString(), note:(app._projMeta&&app._projMeta.note)||"", themes:app.themes, projects:app.projects};
+    const fh=await app.root.getFileHandle("projects.json",{create:true});
+    const w=await fh.createWritable(); await w.write(JSON.stringify(out,null,2)); await w.close(); flashSaved();
+  }catch(e){ console.error(e); setStatus("off","Save failed — click Reconnect"); }
+}
+// one-time: move each item's old project value into theme, then clear project (idempotent)
+async function runMigration(){
+  let ok=true;
+  for(const w of app.weeks){
+    let dirty=false;
+    w.items.forEach(i=>{ if(i.project && !i.theme){ i.theme=i.project; i.project=null; dirty=true; } });
+    if(dirty){ try{ await writeWeek(w); }catch(e){ console.error('migrate week',w.week,e); ok=false; } }
+  }
+  // only stamp projects.json schema 2 once every week wrote OK — otherwise the
+  // original schema-1 file stays put and the (idempotent) migration retries next load.
+  if(ok){ await saveProjects(); console.log('Migrated to Theme/Project model (schema 2).'); }
+  else { console.warn('Migration incomplete — some weeks failed to write; will retry next load.'); }
+}
+async function loadAll(){
+  await loadProjects();
+  const weeks=[], pending=[];
+  for await (const [name,handle] of app.root.entries()){
+    if(handle.kind!=="directory" || !/^WO-/i.test(name)) continue;
+    let data=null;
+    try{ const fh=await handle.getFileHandle("todo-state.json"); data=JSON.parse(await (await fh.getFile()).text()); }catch(e){}
+    if(data){
+      data._dir=handle; data._folder=name;
+      const lbl=weekLabel(name); if(lbl) data.label=lbl;   // derive label from folder date (the Mon–Fri it preps for)
+      data.items=(data.items||[]).map(normalizeItem);
+      weeks.push(data);
+    } else {
+      // no state file yet — pending ingest if it holds any source files
+      let has=false;
+      try{ for await (const [n,h] of handle.entries()){ if(h.kind==="file" && !n.startsWith(".")){ has=true; break; } } }catch(e){}
+      if(has) pending.push({name, dir:handle});
+    }
+  }
+  weeks.sort((a,b)=> (a.week<b.week?1:a.week>b.week?-1:0));
+  pending.sort((a,b)=> (a.name<b.name?1:a.name>b.name?-1:0));
+  app.weeks=weeks; app.pending=pending;
+  if(app._migrating){ try{ await runMigration(); }catch(e){ console.error('migration',e); } app._migrating=false; }
+  setStatus("on", app.root.name+" · "+weeks.length+" week"+(weeks.length===1?"":"s")+(pending.length?" · "+pending.length+" to ingest":""));
+}
+function weekLabel(id){
+  const m=/WO-(\d{2})(\d{2})(\d{2})/.exec(id||""); if(!m) return "";
+  const yr=2000+ +m[1], mo=+m[2]-1, da=+m[3];
+  const mon=new Date(yr,mo,da), fri=new Date(yr,mo,da+4);
+  const MO=d=>d.toLocaleDateString("en-US",{month:"long"});
+  return mon.getMonth()===fri.getMonth()
+    ? `Week of ${MO(mon)} ${mon.getDate()}–${fri.getDate()}`
+    : `Week of ${MO(mon)} ${mon.getDate()} – ${MO(fri)} ${fri.getDate()}`;
+}
+function normalizeItem(i){
+  return Object.assign({due:"",cat:"",source:"",ctx:"",carriedFrom:null,carryAge:0,added:false,project:null,theme:null,parentId:null,
+    done:false,plan:"",notes:"",dismissed:null,subtasks:[]}, i);
+}
+
+/* ---------- saving ---------- */
+let saveTimers={}, savedT=null;
+function flashSaved(){ const e=$('saved'); e.classList.add('show'); clearTimeout(savedT); savedT=setTimeout(()=>e.classList.remove('show'),900); }
+async function writeWeek(week){
+  week.updated=new Date().toISOString();
+  const fh=await week._dir.getFileHandle("todo-state.json",{create:true});
+  const w=await fh.createWritable();
+  const {_dir,_folder,...clean}=week;
+  await w.write(JSON.stringify(clean,null,2)); await w.close();
+  flashSaved();
+}
+function scheduleSave(week,immediate){
+  clearTimeout(saveTimers[week.week]);
+  const go=async()=>{ try{ await writeWeek(week); }catch(e){ console.error(e); setStatus("off","Save failed — click Reconnect"); } };
+  if(immediate) go(); else saveTimers[week.week]=setTimeout(go,600);
+}
+
+/* ---------- helpers ---------- */
+function dueInfo(d){
+  if(!d) return {txt:"—",soon:false,val:Infinity};
+  const dt=new Date(d+"T00:00:00"), today=new Date(); today.setHours(0,0,0,0);
+  const days=Math.round((dt-today)/86400000);
+  let txt=dt.toLocaleDateString("en-US",{month:"short",day:"numeric"});
+  if(days<=0) txt+=" · today/overdue"; else if(days<=7) txt+=" · "+days+"d";
+  return {txt,soon:days<=7,val:dt.getTime()};
+}
+const isResolved=i=> i.done || i.plan==="Not doing";
+function liveItems(week){ return week.items.filter(i=>!i.dismissed); }
+function stats(week){
+  const L=liveItems(week), total=L.length;
+  const done=L.filter(i=>i.done).length;
+  const high=L.filter(i=>i.prio==="High"&&!isResolved(i)).length;
+  const soon=L.filter(i=>dueInfo(i.due).soon&&!isResolved(i)).length;
+  const planned=L.filter(i=>i.plan&&i.plan!=="Done"&&i.plan!=="Not doing").length;
+  return {total,done,high,soon,planned,open:total-L.filter(isResolved).length};
+}
+const esc=s=>(s==null?"":String(s));
+const PRIOS=["High","Medium","Low"];
+function htmlDecode(s){ const t=document.createElement('textarea'); t.innerHTML=String(s==null?"":s); return t.value; }
+function htmlEncode(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function prioSelect(val,id){ return `<select class="prio pill p-${val}" data-id="${id}">`+PRIOS.map(o=>`<option value="${o}" ${o===val?'selected':''}>${o}</option>`).join("")+`</select>`; }
+
+/* ---------- theme helpers ---------- */
+function theme(id){ return app.themeById[id]||null; }
+function themeChip(id){
+  const t=theme(id); if(!t) return `<span class="pchip" style="background:#f0f1f3;color:#6b7280">— no theme</span>`;
+  return `<span class="pchip" style="background:${hexRgba(t.color,.12)};color:${t.color}"><span class="pdot" style="background:${t.color}"></span>${esc(t.id)}</span>`;
+}
+function themeSelect(id, attrs){
+  const cur=theme(id), style=cur?`style="color:${cur.color};border-color:${hexRgba(cur.color,.5)};background:${hexRgba(cur.color,.10)}"`:"";
+  return `<select class="theme" ${attrs||""} ${style}><option value="">— theme</option>`+
+    app.themes.map(t=>`<option value="${t.id}" ${t.id===id?'selected':''}>${esc(t.id)}</option>`).join("")+
+    `<option value="__newt__">+ New theme…</option></select>`;
+}
+function themeItems(tid){ const out=[]; app.weeks.forEach(w=>w.items.forEach(i=>{ if(!i.dismissed && i.theme===tid) out.push({it:i, wk:w}); })); return out; }
+function themeOpenCount(tid){ return themeItems(tid).filter(x=>!isResolved(x.it)).length; }
+function themeContext(tid){
+  const t=theme(tid); if(!t) return "";
+  return `<div style="margin-top:11px;padding-top:11px;border-top:1px solid var(--line)">`+
+    `<div class="lbl">Theme</div><div style="margin:4px 0 5px">${themeChip(tid)}</div>`+
+    (t.blurb?`<div style="font-size:12.5px;color:#3c4147;line-height:1.5">${esc(t.blurb)}</div>`:"")+`</div>`;
+}
+
+/* ---------- project helpers ---------- */
+function proj(id){ return app.projById[id]||null; }
+function pad3(n){ return String(n).padStart(3,"0"); }
+function ymd(d){ d=d||new Date(); return String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0"); }
+function nextSeq(){ let mx=0; app.projects.forEach(p=>{ const m=/-(\d+)$/.exec(p.uid||""); if(m) mx=Math.max(mx,+m[1]); }); return mx+1; }
+function makeUid(prefix){ return `${(prefix||"PRJ").toUpperCase().replace(/\s+/g,"-")}-${ymd()}-${pad3(nextSeq())}`; }
+function hexRgba(hex,a){ const n=parseInt((hex||"#888").slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+// inline style for a colored chip button — light tint when resting, solid fill when active
+function chipStyle(color,on){ return on
+  ? `background:${color};border-color:${color};color:#fff`
+  : `background:${hexRgba(color,.12)};border-color:${hexRgba(color,.42)};color:${color}`; }
+function projChip(id){
+  const p=proj(id); if(!p) return `<span class="pchip" style="background:#f0f1f3;color:#6b7280">— none</span>`;
+  return `<span class="pchip" style="background:${hexRgba(p.color,.12)};color:${p.color}"><span class="pdot" style="background:${p.color}"></span>${esc(p.id)}</span>`;
+}
+function projSelect(id, attrs){
+  const cur=proj(id), style=cur?`style="color:${cur.color};border-color:${hexRgba(cur.color,.5)};background:${hexRgba(cur.color,.10)}"`:"";
+  return `<select class="proj" ${attrs||""} ${style}><option value="">— none</option>`+
+    app.projects.map(p=>`<option value="${p.id}" ${p.id===id?'selected':''}>${esc(p.id)}</option>`).join("")+
+    `<option value="__new__">+ New project…</option></select>`;
+}
+// all live items for a project across every week, with their week attached
+function projItems(pid){
+  const out=[];
+  app.weeks.forEach(w=>w.items.forEach(i=>{ if(!i.dismissed && i.project===pid) out.push({it:i, wk:w}); }));
+  return out;
+}
+function projOpenCount(pid){ return projItems(pid).filter(x=>!isResolved(x.it)).length; }
+function copyBrief(pid){
+  const p=proj(pid); if(!p) return;
+  const open=projItems(pid).filter(x=>!isResolved(x.it))
+    .sort((a,b)=>PRIO_RANK[a.it.prio]-PRIO_RANK[b.it.prio]||dueInfo(a.it.due).val-dueInfo(b.it.due).val);
+  const strip=s=>String(s||"").replace(/&amp;/g,"&").replace(/&rarr;/g,"→").replace(/&mdash;/g,"—").replace(/&middot;/g,"·").replace(/<[^>]+>/g,"");
+  const llm=p.llm&&(p.llm.name||p.llm.tool||p.llm.link)?`Where it lives: ${[p.llm.tool,p.llm.name].filter(Boolean).join(" / ")}${p.llm.link?" ("+p.llm.link+")":""}\n`:"";
+  let t=`[${p.uid||p.id}] ${strip(p.name)}\n${strip(p.blurb)}\n${llm}\nOpen items:\n`;
+  t+= open.length? open.map(x=>`- ${strip(x.it.item)}${x.it.due?" (due "+x.it.due+")":""}${x.it.prio==='High'?" [High]":""} — ${strip(x.it.detail)} [${x.wk.week}]`).join("\n")
+                 : "- (none open)";
+  navigator.clipboard.writeText(t).then(()=>{ const b=document.getElementById('briefBtn'); if(b){const o=b.textContent;b.textContent="✓ Copied";setTimeout(()=>b.textContent=o,1200);} },()=>alert("Copy failed — select and copy manually."));
+}
+
+function itemUid(pid){ const p=proj(pid); return p&&p.uid?`<div class="puid" style="color:${p.color}">${esc(p.uid)}</div>`:""; }
+function projContext(pid){
+  const p=proj(pid); if(!p) return "";
+  const llm=p.llm||{};
+  const where=(llm.tool||llm.name||llm.link)
+    ? `<div class="srcline">Lives in: ${esc([llm.tool,llm.name].filter(Boolean).join(" / "))||"(link)"}${llm.link?` · <a href="${esc(llm.link)}" target="_blank" rel="noopener">open ↗</a>`:""}</div>`
+    : `<div class="srcline" style="font-style:italic">No LLM location set — open the project to add where it lives.</div>`;
+  return `<div style="margin-top:11px;padding-top:11px;border-top:1px solid var(--line)">`+
+    `<div class="lbl">Project</div>`+
+    `<div style="margin:4px 0 5px">${projChip(pid)} ${p.uid?`<span class="puid">${esc(p.uid)}</span> `:""}<a href="#project/${encodeURIComponent(pid)}" style="font-size:11.5px;color:var(--accent)">view project ↗</a></div>`+
+    (p.blurb?`<div style="font-size:12.5px;color:#3c4147;line-height:1.5">${esc(p.blurb)}</div>`:"")+
+    where+`</div>`;
+}
+
+/* ---------- routing ---------- */
+function route(){
+  renderProjectBar();
+  if(!app.root){ renderGate(); return; }
+  const h=location.hash.replace(/^#/,"");
+  if(h.startsWith("week/")){ const id=decodeURIComponent(h.slice(5)); const w=app.weeks.find(x=>x.week===id); if(w){ renderWeek(w); return; } }
+  if(h.startsWith("project/")){ const id=decodeURIComponent(h.slice(8)); if(proj(id)){ renderProject(id); return; } }
+  if(h==="projects"){ renderProjects(); return; }
+  renderHome();
+}
+window.addEventListener('hashchange',route);
+
+/* ---------- persistent project chip bar (under the top bar, every screen) ---------- */
+function renderProjectBar(){
+  const bar=$('pbar'); if(!bar) return;
+  if(!app.root || !app.projects.length){ bar.style.display='none'; bar.innerHTML=''; return; }
+  bar.style.display='flex';
+  const h=location.hash.replace(/^#/,"");
+  const curPid=h.startsWith('project/')?decodeURIComponent(h.slice(8)):null;
+  const list=app.projects.map(p=>({p, open:projOpenCount(p.id), total:projItems(p.id).length}));
+  const active=list.filter(x=>x.total>0).sort((a,b)=>b.open-a.open);
+  const show=active.length?active:list;
+  const chips=show.map(({p,open})=>{ const on=curPid===p.id;
+    return `<button class="pchipbtn ${on?'on':''}" data-pid="${esc(p.id)}" title="${esc(p.name)}" style="${chipStyle(p.color,on)}"><span class="pdot" style="background:${on?'#fff':p.color}"></span>${esc(p.id)}${open?`<span class="pcount">${open}</span>`:''}</button>`;
+  }).join("");
+  bar.innerHTML=`<button class="pchipbtn allchip ${curPid?'':'on'}" data-pid="__all__">All</button><span class="pbardiv"></span>${chips}`;
+}
+
+/* ---------- gate (not connected) ---------- */
+function renderGate(){
+  $('app').innerHTML=`<div class="gate">
+    <h2>Weekly To-Do</h2>
+    <p>Your tasks live in <strong>todo-state.json</strong> files inside each week folder, so they sync wherever that folder syncs (OneDrive, Dropbox, iCloud…).</p>
+    <p>Connect this app to your <strong>week-prep</strong> folder — the one holding your <strong>WO-YYMMDD</strong> week folders — once per session and your edits save straight back into it — no downloads.</p>
+    <p class="big"><button class="openbtn" id="gateConn">Connect your week folder</button></p>
+    <p style="color:var(--muted);font-size:12.5px">Chrome or Edge only. You'll pick the folder and click Allow.</p>
+  </div>`;
+  $('gateConn').onclick=connect;
+}
+
+/* ---------- home ---------- */
+function pendingBanner(){
+  if(!app.pending.length) return "";
+  const noKey=!apiKey();
+  return `<div class="ingest">
+    <div class="ingtxt">✨ <strong>${app.pending.length} new week folder${app.pending.length>1?'s':''} ready to ingest:</strong> ${app.pending.map(p=>esc(p.name)).join(", ")}<div class="inghint">Reads the emails, notes &amp; screenshots, carries over your open items, tags projects — then writes the week.</div></div>
+    <div class="ingrow">${app.pending.map(p=>`<button class="openbtn ingbtn" data-name="${esc(p.name)}">Ingest ${esc(p.name)} →</button>`).join("")}
+      <span id="ingestStatus" class="ingstatus">${noKey?'⚠ Add your API key in ⚙ AI first':''}</span></div>
+  </div>`;
+}
+function bindIngest(){
+  document.querySelectorAll('.ingbtn').forEach(b=>b.onclick=()=>{ const e=app.pending.find(p=>p.name===b.dataset.name); if(e) ingestWeek(e); });
+}
+function renderHome(){
+  const banner=pendingBanner();
+  if(!app.weeks.length){
+    $('app').innerHTML=`<h1>Weekly To-Do</h1><div class="crumbs">Home</div>`+banner+
+      (app.pending.length?"":`<div class="empty">Connected, but no weeks yet. Drop a week's notes into a <strong>WO-YYMMDD</strong> folder and it'll show up here to ingest.</div>`);
+    bindIngest(); return;
+  }
+  const cur=app.weeks[0], earlier=app.weeks.slice(1);
+  const s=stats(cur);
+  let html=`<h1>Weekly To-Do</h1><div class="crumbs">Home</div>`+banner+`
+  <div class="hero">
+    <div class="left">
+      <span class="tag">This week</span>
+      <h2>${esc(cur.week)}</h2>
+      <div class="dates">${esc(cur.label||"")}${cur.dates?" · "+esc(cur.dates):""}</div>
+      <button class="openbtn" onclick="location.hash='week/${encodeURIComponent(cur.week)}'">Open this week →</button>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="n">${s.open}</div><div class="l">Open</div></div>
+      <div class="tile hi"><div class="n">${s.high}</div><div class="l">High</div></div>
+      <div class="tile soon"><div class="n">${s.soon}</div><div class="l">Due ≤7d</div></div>
+      <div class="tile"><div class="n">${s.done}/${s.total}</div><div class="l">Done</div></div>
+    </div>
+  </div>`;
+  html+=`<p class="secLbl">Earlier weeks</p>`;
+  if(earlier.length){
+    html+=`<div class="grid">`+earlier.map(w=>{
+      const st=stats(w), pct=st.total?Math.round(100*st.done/st.total):0;
+      return `<div class="wcard" onclick="location.hash='week/${encodeURIComponent(w.week)}'">
+        <h3>${esc(w.week)}</h3><div class="d">${esc(w.label||"")}</div>
+        <div class="mini"><div><b>${st.open}</b>open</div><div><b>${st.high}</b>high</div><div><b>${st.done}/${st.total}</b>done</div></div>
+        <div class="bar2"><i style="width:${pct}%"></i></div></div>`;
+    }).join("")+`</div>`;
+  } else {
+    html+=`<div class="empty">No earlier weeks yet. As you review more folders, they'll show here as cards.</div>`;
+  }
+  // by-project (across all weeks)
+  html+=`<div style="display:flex;align-items:center;gap:12px;margin:24px 0 10px;flex-wrap:wrap">
+    <span class="secLbl" style="margin:0">By project · all weeks</span>
+    <button class="add" id="newProjBtn" style="padding:4px 12px">+ New project</button>
+    <span style="flex:1"></span>
+    <input class="search" id="projSearch" placeholder="Search ID / prefix / name…" value="${esc(app.projQ||'').replace(/"/g,'&quot;')}" style="min-width:220px">
+  </div>
+  <div id="pgridWrap"></div>`;
+  $('app').innerHTML=html;
+  bindIngest();
+  const npb=$('newProjBtn'); if(npb) npb.onclick=()=>openProjectModal('create');
+  const ps=$('projSearch'); if(ps) ps.oninput=e=>{ app.projQ=e.target.value; fillProjectGrid(); };
+  fillProjectGrid();
+}
+/* ---------- all-projects index (reachable from the top bar anywhere) ---------- */
+function renderProjects(){
+  $('app').innerHTML=`<h1>Projects &amp; Themes</h1><div class="crumbs"><a href="#">Home</a> › Projects</div>
+  <p class="secLbl" style="margin-top:18px">Themes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— high-level areas; click one to edit</span></p>
+  <div id="tchipsWrap"></div>
+  <div style="display:flex;align-items:center;gap:12px;margin:26px 0 10px;flex-wrap:wrap">
+    <span class="secLbl" style="margin:0">Projects <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— specific workstreams</span></span>
+    <button class="add" id="newProjBtn" style="padding:4px 12px">+ New project</button>
+    <span style="flex:1"></span>
+    <input class="search" id="projSearch" placeholder="Search ID / prefix / name…" value="${esc(app.projQ||'').replace(/"/g,'&quot;')}" style="min-width:220px">
+  </div>
+  <div id="pgridWrap"></div>`;
+  const npb=$('newProjBtn'); if(npb) npb.onclick=()=>openProjectModal('create');
+  const ps=$('projSearch'); if(ps) ps.oninput=e=>{ app.projQ=e.target.value; fillProjectGrid(); };
+  fillThemeChips(); fillProjectGrid();
+}
+function fillThemeChips(){
+  const w=$('tchipsWrap'); if(!w) return;
+  const chips=app.themes.map(t=>`<button class="pchipbtn" data-tid="${esc(t.id)}" title="${esc(t.name)}" style="${chipStyle(t.color,false)}"><span class="pdot" style="background:${t.color}"></span>${esc(t.id)}${(()=>{const o=themeOpenCount(t.id);return o?`<span class="pcount">${o}</span>`:'';})()}</button>`).join("");
+  w.innerHTML=`<div class="pchips">${chips}<button class="pchipbtn" id="newThemeBtn" style="border-style:dashed;color:var(--muted)">+ New theme</button></div>`;
+  const nb=$('newThemeBtn'); if(nb) nb.onclick=()=>openThemeModal('create');
+  w.querySelectorAll('.pchipbtn[data-tid]').forEach(b=>b.onclick=()=>openThemeModal('edit', b.dataset.tid));
+}
+function fillProjectGrid(){
+  const wrap=$('pgridWrap'); if(!wrap) return;
+  if(!app.projects.length){ wrap.innerHTML=`<div class="empty">No projects yet. Click <strong>+ New project</strong> to create one, then tag items with the Project column.</div>`; return; }
+  const q=(app.projQ||"").toLowerCase().trim();
+  let list=app.projects.filter(p=> !q || ((p.uid||"")+" "+(p.prefix||"")+" "+(p.id||"")+" "+(p.name||"")).toLowerCase().includes(q));
+  list=list.map(p=>({p,open:projOpenCount(p.id),total:projItems(p.id).length})).sort((a,b)=>b.open-a.open);
+  if(!list.length){ wrap.innerHTML=`<div class="empty">No projects match “${esc(app.projQ)}”.</div>`; return; }
+  wrap.innerHTML=`<div class="pgrid">`+list.map(({p,open,total})=>
+    `<div class="pcard" style="border-left-color:${p.color}" onclick="location.hash='project/${encodeURIComponent(p.id)}'">
+      <h4 style="color:${p.color}">${esc(p.id)}</h4>${p.uid?`<div class="puid">${esc(p.uid)}</div>`:''}<div class="pn">${esc(p.name)}</div>
+      <div class="pc"><b>${open}</b> open · ${total} total${(p.llm&&(p.llm.name||p.llm.link))?' · 🔗':''}</div></div>`
+  ).join("")+`</div>`;
+}
+
+/* ---------- week view ---------- */
+function renderWeek(week){
+  const isCurrent = app.weeks[0]===week;
+  const v=app.view;
+  if(v.week!==week){ // switched weeks: reset filters; current hides done, archives show it
+    v.week=week; v.prio="all"; v.q=""; v.sortK=null; v.sortDir=1; v.open={}; v.hideDone=isCurrent; v.proj="all"; v.theme="all";
+  }
+
+  const s=stats(week);
+  $('app').innerHTML=`
+    <div class="crumbs"><a href="#">Home</a> › ${esc(week.week)}${isCurrent?" (this week)":""}</div>
+    <h1>${esc(week.week)} — ${esc(week.label||"")}</h1>
+    <div class="stats">
+      <div class="stat"><div class="n">${s.total}</div><div class="l">Items</div></div>
+      <div class="stat"><div class="n">${s.high}</div><div class="l">High &amp; open</div></div>
+      <div class="stat"><div class="n">${s.soon}</div><div class="l">Due ≤7d</div></div>
+      <div class="stat"><div class="n">${s.planned}</div><div class="l">Scheduled</div></div>
+      <div class="stat"><div class="n">${s.done}/${s.total}</div><div class="l">Done</div></div>
+    </div>
+    <div class="controls">
+      <div class="grp" id="prioF">
+        ${["all","High","Medium","Low"].map(p=>`<button class="f ${v.prio===p?'on':''}" data-p="${p}">${p==="all"?"All":p}</button>`).join("")}
+      </div>
+      <button class="add" id="addBtn">+ Add item</button>
+      <button class="add" id="rescanBtn" title="Scan this week's folder for newly added files and extract any new action items" style="background:var(--card);color:var(--accent);border-color:var(--accentline)">⟳ Re-scan week</button>
+      <span id="rescanStatus" style="font-size:12px;color:var(--muted)"></span>
+      <select class="projF" id="themeF"><option value="all">All themes</option>${app.themes.map(t=>`<option value="${t.id}" ${v.theme===t.id?'selected':''}>${esc(t.id)}</option>`).join("")}</select>
+      <select class="projF" id="projF"><option value="all">All projects</option>${app.projects.map(p=>`<option value="${p.id}" ${v.proj===p.id?'selected':''}>${esc(p.id)}</option>`).join("")}</select>
+      <span class="spacer"></span>
+      <label class="f" style="cursor:pointer"><input type="checkbox" id="hideDone" ${v.hideDone?"checked":""}> Hide done</label>
+      <input class="search" id="search" placeholder="Search…" value="${esc(v.q).replace(/"/g,'&quot;')}">
+    </div>
+    <table><thead><tr>
+      <th style="width:32px"></th>
+      <th data-k="item" style="width:24%">Item <span class="ar">▲▼</span></th>
+      <th data-k="detail" style="width:32%">Detail</th>
+      <th data-k="due">Due <span class="ar">▲▼</span></th>
+      <th data-k="prio">Priority <span class="ar">▲▼</span></th>
+      <th data-k="project">Theme / Project <span class="ar">▲▼</span></th>
+      <th data-k="plan">Plan <span class="ar">▲▼</span></th>
+      <th>Notes</th>
+    </tr></thead><tbody id="tb"></tbody></table>
+    <div class="empty2" id="emptyMsg" style="display:none">No items match.</div>
+    <details class="tray" id="tray" style="display:none"><summary>Removed items <span class="cnt" id="trayCnt"></span></summary><div id="trayList"></div></details>`;
+  bindWeek(week);
+  renderRows(week);
+}
+
+function rowsFor(week){
+  const v=app.view;
+  let rows=liveItems(week).slice();
+  if(v.prio!=="all") rows=rows.filter(r=>r.prio===v.prio);
+  if(v.proj&&v.proj!=="all") rows=rows.filter(r=>r.project===v.proj);
+  if(v.theme&&v.theme!=="all") rows=rows.filter(r=>r.theme===v.theme);
+  if(v.q){const q=v.q.toLowerCase(); rows=rows.filter(r=>{const pr=proj(r.project),ph=pr?((pr.uid||"")+" "+(pr.prefix||"")+" "+(pr.id||"")+" "+(pr.name||"")):"";const th=theme(r.theme),thh=th?((th.id||"")+" "+(th.name||"")):"";return ((r.item||"")+" "+(r.detail||"")+" "+(r.cat||"")+" "+(r.source||"")+" "+(r.ctx||"")+" "+(r.notes||"")+" "+ph+" "+thh).toLowerCase().includes(q);});}
+  if(v.hideDone) rows=rows.filter(r=>!r.done);
+  if(v.sortK){
+    rows.sort((a,b)=>{let x,y;
+      if(v.sortK==="due"){x=dueInfo(a.due).val;y=dueInfo(b.due).val;}
+      else if(v.sortK==="prio"){x=PRIO_RANK[a.prio];y=PRIO_RANK[b.prio];}
+      else if(v.sortK==="plan"){x=PLAN_RANK[a.plan]??9;y=PLAN_RANK[b.plan]??9;}
+      else {x=(a[v.sortK]||"").toLowerCase();y=(b[v.sortK]||"").toLowerCase();}
+      return x<y?-v.sortDir:x>y?v.sortDir:0;});
+  } else rows.sort((a,b)=>PRIO_RANK[a.prio]-PRIO_RANK[b.prio]||dueInfo(a.due).val-dueInfo(b.due).val);
+  return rows;
+}
+function renderRows(week){
+  const v=app.view, tb=$('tb'); tb.innerHTML="";
+  const rows=rowsFor(week);
+  rows.forEach(r=>{
+    const due=dueInfo(r.due), open=v.open[r.id], nd=r.plan==="Not doing";
+    const tr=document.createElement('tr'); tr.className="main"+(r.done?" done":"")+(nd?" notdoing":"");
+    const plan=`<select class="plan ${r.plan?'set':''} ${nd?'nd':''}" data-id="${r.id}">`+
+      PLAN_OPTS.map(o=>`<option value="${o}" ${r.plan===o?'selected':''}>${o||'— plan'}</option>`).join("")+`</select>`;
+    const carry=r.carriedFrom?`<span class="carry">↩ ${esc(r.carriedFrom)}${r.carryAge>1?" ·"+r.carryAge+"w":""}</span>`:"";
+    const stp=stProgress(r), stbadge=stp.total?`<span class="subbadge${stp.done===stp.total?' alldone':''}">☑ ${stp.done}/${stp.total}</span>`:"";
+    const promoted=r.parentId?`<span class="carry">↳ promoted</span>`:"";
+    tr.innerHTML=
+      `<td><input type="checkbox" class="chk" ${r.done?"checked":""} data-id="${r.id}"></td>`+
+      `<td class="itemcell"><div class="itemtop"><button class="exp ${open?'open':''}" data-id="${r.id}">▸</button>`+
+        `<span class="item">${esc(r.item)}</span>${stbadge}</div><div class="sub">${itemUid(r.project)}<span class="cat">${esc(r.cat||'')}${r.added?' · added':''}</span>${carry}${promoted}</div></td>`+
+      `<td class="detail">${esc(r.detail)}</td>`+
+      `<td class="due ${due.soon?'soon':''}">${due.txt}</td>`+
+      `<td>${prioSelect(r.prio,r.id)}</td>`+
+      `<td class="tpcell">${themeSelect(r.theme,`data-id="${r.id}"`)}${projSelect(r.project,`data-id="${r.id}"`)}</td>`+
+      `<td>${plan}</td>`+
+      `<td><input class="notes" data-id="${r.id}" value="${esc(r.notes).replace(/"/g,'&quot;')}" placeholder="notes…"></td>`;
+    tb.appendChild(tr);
+    if(open){
+      const dr=document.createElement('tr'); dr.className="detailrow";
+      const reason=`<select class="delreason" data-id="${r.id}">`+DISMISS_REASONS.map(o=>`<option>${o}</option>`).join("")+`</select>`;
+      dr.innerHTML=`<td colspan="8"><div class="ctxwrap"><div class="lbl">Context</div>${r.ctx||'<em>No extra context.</em>'}`+
+        `<div class="srcline">Source: ${esc(r.source||'—')}${r.carriedFrom?' · carried from '+esc(r.carriedFrom):''}</div>`+
+        subtasksHtml(r)+
+        themeContext(r.theme)+
+        projContext(r.project)+
+        `<div class="delwrap"><button class="editp itemedit" data-id="${r.id}">✎ Edit item</button><span style="flex:1"></span><span class="lbl2">Not relevant?</span>${reason}<button class="del" data-id="${r.id}">Remove item</button></div></div></td>`;
+      tb.appendChild(dr);
+    }
+  });
+  $('emptyMsg').style.display=rows.length?"none":"block";
+  renderTray(week);
+  // refresh stat tiles
+  const s=stats(week), st=document.querySelectorAll('.stats .stat .n');
+  if(st.length===5){ st[0].textContent=s.total; st[1].textContent=s.high; st[2].textContent=s.soon; st[3].textContent=s.planned; st[4].textContent=s.done+"/"+s.total; }
+}
+function renderTray(week){
+  const dis=week.items.filter(i=>i.dismissed), tray=$('tray');
+  if(!dis.length){ tray.style.display="none"; return; }
+  tray.style.display="block"; $('trayCnt').textContent="("+dis.length+")";
+  $('trayList').innerHTML=dis.map(i=>`<div class="row"><div><strong>${esc(i.item)}</strong>`+
+    `<div class="why">${esc(i.dismissed.reason)}${i.added?' · was added manually':''}</div></div>`+
+    `<button class="restore" data-id="${i.id}">Restore</button></div>`).join("");
+}
+
+function findItem(week,id){ return week.items.find(i=>i.id===id); }
+
+/* ---------- subtasks (checklist in context, auto-complete parent) ---------- */
+function stProgress(it){ const s=it.subtasks||[]; return {done:s.filter(x=>x.done).length, total:s.length}; }
+function syncParentDone(it){ const s=it.subtasks||[]; if(s.length && s.every(x=>x.done)) it.done=true; }
+function subtasksHtml(it){
+  const s=it.subtasks||[], p=stProgress(it);
+  const rows=s.map(st=>`<div class="strow ${st.done?'stdone':''}">`+
+    `<input type="checkbox" class="stchk" data-id="${it.id}" data-st="${st.id}" ${st.done?'checked':''}>`+
+    `<span class="sttext">${esc(st.text)}</span>`+
+    `<button class="stpromote" data-id="${it.id}" data-st="${st.id}" title="Promote to its own task">↑ task</button>`+
+    `<button class="stdel" data-id="${it.id}" data-st="${st.id}" title="Delete subtask">×</button></div>`).join("");
+  return `<div class="subsec"><div class="lbl">Subtasks${p.total?` (${p.done}/${p.total})`:''}</div>`+
+    rows+
+    `<div class="staddrow"><input class="stadd" data-id="${it.id}" placeholder="Add a subtask…"><button class="staddbtn" data-id="${it.id}">Add</button></div></div>`;
+}
+function addSubtask(week,itemId,text){
+  const it=findItem(week,itemId); if(!it||!String(text).trim()) return;
+  (it.subtasks=it.subtasks||[]).push({id:"st-"+Date.now(), text:htmlEncode(String(text).trim()), done:false});
+  scheduleSave(week,true); renderRows(week);
+  const inp=document.querySelector('.stadd[data-id="'+(window.CSS&&CSS.escape?CSS.escape(itemId):itemId)+'"]'); if(inp) inp.focus();
+}
+function toggleSubtask(week,itemId,stId,done){
+  const it=findItem(week,itemId), st=it&&(it.subtasks||[]).find(s=>s.id===stId); if(!st) return;
+  st.done=done; syncParentDone(it); scheduleSave(week,true); renderRows(week);
+}
+function delSubtask(week,itemId,stId){
+  const it=findItem(week,itemId); if(!it) return;
+  it.subtasks=(it.subtasks||[]).filter(s=>s.id!==stId); syncParentDone(it); scheduleSave(week,true); renderRows(week);
+}
+function promoteSubtask(week,itemId,stId){
+  const it=findItem(week,itemId); if(!it) return;
+  const st=(it.subtasks||[]).find(s=>s.id===stId); if(!st) return;
+  week.items.push(normalizeItem({ id:"custom-"+Date.now(), item:st.text, detail:"—", prio:it.prio,
+    project:it.project, source:"Promoted from: "+it.item, parentId:it.id, added:true }));
+  it.subtasks=it.subtasks.filter(s=>s.id!==stId);
+  scheduleSave(week,true); renderRows(week);
+}
+
+function bindWeek(week){
+  const v=app.view;
+  $('prioF').onclick=e=>{ if(!e.target.dataset.p) return; v.prio=e.target.dataset.p; renderWeek(week); };
+  $('themeF').onchange=e=>{ v.theme=e.target.value; renderRows(week); };
+  $('projF').onchange=e=>{ v.proj=e.target.value; renderRows(week); };
+  $('search').oninput=e=>{ v.q=e.target.value; renderRows(week); };
+  $('hideDone').onchange=e=>{ v.hideDone=e.target.checked; renderRows(week); };
+  document.querySelectorAll('thead th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k; if(v.sortK===k)v.sortDir*=-1; else{v.sortK=k;v.sortDir=1;} renderRows(week);});
+  $('addBtn').onclick=openModal;
+  const rb=$('rescanBtn'); if(rb) rb.onclick=()=>rescanWeek(week);
+  const tb=$('tb');
+  tb.addEventListener('click',e=>{
+    const sp=e.target.closest('.stpromote'); if(sp){ promoteSubtask(week, sp.dataset.id, sp.dataset.st); return; }
+    const sd=e.target.closest('.stdel'); if(sd){ delSubtask(week, sd.dataset.id, sd.dataset.st); return; }
+    const sa=e.target.closest('.staddbtn'); if(sa){ const inp=sa.closest('.staddrow').querySelector('.stadd'); addSubtask(week, sa.dataset.id, inp.value); inp.value=""; return; }
+    const exp=e.target.closest('.exp'); if(exp){ v.open[exp.dataset.id]=!v.open[exp.dataset.id]; renderRows(week); return; }
+    const ed=e.target.closest('.itemedit'); if(ed){ openItemModal(findItem(week,ed.dataset.id)); return; }
+    const del=e.target.closest('.del'); if(del){ const it=findItem(week,del.dataset.id);
+      const sel=del.closest('.delwrap').querySelector('.delreason');
+      it.dismissed={reason:sel?sel.value:'Not relevant', ts:Date.now()}; delete v.open[it.id];
+      scheduleSave(week,true); renderRows(week); return; }
+  });
+  tb.addEventListener('change',e=>{
+    const id=e.target.dataset.id; if(!id) return;
+    if(e.target.classList.contains('stchk')){ toggleSubtask(week, id, e.target.dataset.st, e.target.checked); return; }
+    const it=findItem(week,id);
+    if(e.target.classList.contains('chk')){ it.done=e.target.checked; scheduleSave(week,true); renderRows(week); }
+    else if(e.target.classList.contains('prio')){ it.prio=e.target.value; scheduleSave(week,true); renderRows(week); }
+    else if(e.target.classList.contains('plan')){ it.plan=e.target.value; if(e.target.value==="Done") it.done=true; scheduleSave(week,true); renderRows(week); }
+    else if(e.target.classList.contains('proj')){
+      if(e.target.value==="__new__"){ openProjectModal('create', null, {itemId:it.id, weekId:week.week}); renderRows(week); }
+      else { it.project=e.target.value||null; scheduleSave(week,true); renderRows(week); }
+    }
+    else if(e.target.classList.contains('theme')){
+      if(e.target.value==="__newt__"){ openThemeModal('create', null, {itemId:it.id, weekId:week.week}); renderRows(week); }
+      else { it.theme=e.target.value||null; scheduleSave(week,true); renderRows(week); }
+    }
+  });
+  tb.addEventListener('input',e=>{ const id=e.target.dataset.id; if(id&&e.target.classList.contains('notes')){ findItem(week,id).notes=e.target.value; scheduleSave(week); } });
+  tb.addEventListener('keydown',e=>{ if(e.key==="Enter" && e.target.classList.contains('stadd')){ e.preventDefault(); addSubtask(week, e.target.dataset.id, e.target.value); e.target.value=""; } });
+  $('trayList').addEventListener('click',e=>{ const r=e.target.closest('.restore'); if(!r) return; findItem(week,r.dataset.id).dismissed=null; scheduleSave(week,true); renderRows(week); });
+}
+
+/* ---------- project view (across all weeks) ---------- */
+function renderProject(pid){
+  const p=proj(pid); if(!p){ location.hash=""; return; }
+  if(!app.pview||app.pview.pid!==pid) app.pview={pid, hideDone:true, q:""};
+  const pv=app.pview, llm=p.llm||{tool:"",name:"",link:""};
+  $('app').innerHTML=`
+    <div class="crumbs"><a href="#">Home</a> › Project ${esc(p.id)}</div>
+    <div class="phead" style="border-left-color:${p.color}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div><div class="pid" style="color:${p.color}">PROJECT · ${esc(p.id)}${p.uid?` · <span style="font-family:ui-monospace,Menlo,monospace">${esc(p.uid)}</span>`:''}</div><h1>${esc(p.name)}</h1></div>
+        <button class="editp" id="editProjBtn">Edit project</button>
+      </div>
+      <p class="blurb">${esc(p.blurb||"")}</p>
+      <div class="llmbar">
+        <span class="lk">Where it lives</span>
+        <input id="llm_tool" placeholder="Tool (ChatGPT, Claude…)" value="${esc(llm.tool).replace(/"/g,'&quot;')}" style="width:150px">
+        <input id="llm_name" placeholder="Chat / project name" value="${esc(llm.name).replace(/"/g,'&quot;')}" style="width:180px">
+        <input id="llm_link" placeholder="Link (optional)" value="${esc(llm.link).replace(/"/g,'&quot;')}" style="width:200px">
+        ${llm.link?`<a href="${esc(llm.link)}" target="_blank" rel="noopener">open ↗</a>`:""}
+        <span style="flex:1"></span>
+        <button class="brief" id="briefBtn">Copy brief for LLM</button>
+      </div>
+    </div>
+    <div class="controls">
+      <label class="f" style="cursor:pointer"><input type="checkbox" id="pHideDone" ${pv.hideDone?"checked":""}> Hide done</label>
+      <input class="search" id="pSearch" placeholder="Search…" value="${esc(pv.q).replace(/"/g,'&quot;')}">
+    </div>
+    <table><thead><tr>
+      <th style="width:32px"></th><th style="width:26%">Item</th><th style="width:32%">Detail</th>
+      <th>Week</th><th>Due</th><th>Priority</th><th>Plan</th><th>Notes</th>
+    </tr></thead><tbody id="ptb"></tbody></table>
+    <div class="empty2" id="pEmpty" style="display:none">No items in this project yet.</div>`;
+  bindProject(p); renderProjectRows(p);
+}
+function renderProjectRows(p){
+  const pv=app.pview, tb=$('ptb'); tb.innerHTML="";
+  let rows=projItems(p.id);
+  if(pv.hideDone) rows=rows.filter(x=>!x.it.done);
+  if(pv.q){const q=pv.q.toLowerCase(); rows=rows.filter(x=>((x.it.item||"")+" "+(x.it.detail||"")+" "+(x.it.notes||"")).toLowerCase().includes(q));}
+  rows.sort((a,b)=> (a.wk.week<b.wk.week?1:a.wk.week>b.wk.week?-1:0) || PRIO_RANK[a.it.prio]-PRIO_RANK[b.it.prio] || dueInfo(a.it.due).val-dueInfo(b.it.due).val);
+  rows.forEach(({it,wk})=>{
+    const due=dueInfo(it.due), nd=it.plan==="Not doing";
+    const tr=document.createElement('tr'); tr.className="main"+(it.done?" done":"")+(nd?" notdoing":"");
+    const plan=`<select class="plan ${it.plan?'set':''} ${nd?'nd':''}" data-id="${it.id}" data-week="${wk.week}">`+
+      PLAN_OPTS.map(o=>`<option value="${o}" ${it.plan===o?'selected':''}>${o||'— plan'}</option>`).join("")+`</select>`;
+    tr.innerHTML=
+      `<td><input type="checkbox" class="chk" ${it.done?"checked":""} data-id="${it.id}" data-week="${wk.week}"></td>`+
+      `<td class="itemcell"><span class="item">${esc(it.item)}</span>${(()=>{const q=stProgress(it);return q.total?`<span class="subbadge${q.done===q.total?' alldone':''}">☑ ${q.done}/${q.total}</span>`:"";})()}${it.carriedFrom?`<span class="carry">↩ ${esc(it.carriedFrom)}</span>`:""}${it.theme?`<div class="sub" style="margin-left:0;margin-top:5px">${themeChip(it.theme)}</div>`:""}</td>`+
+      `<td class="detail">${esc(it.detail)}</td>`+
+      `<td><span class="wkbadge">${esc(wk.week)}</span></td>`+
+      `<td class="due ${due.soon?'soon':''}">${due.txt}</td>`+
+      `<td><span class="pill p-${it.prio}">${it.prio}</span></td>`+
+      `<td>${plan}</td>`+
+      `<td><input class="notes" data-id="${it.id}" data-week="${wk.week}" value="${esc(it.notes).replace(/"/g,'&quot;')}" placeholder="notes…"></td>`;
+    tb.appendChild(tr);
+  });
+  $('pEmpty').style.display=rows.length?"none":"block";
+}
+function bindProject(p){
+  const pv=app.pview;
+  $('pHideDone').onchange=e=>{ pv.hideDone=e.target.checked; renderProjectRows(p); };
+  $('pSearch').oninput=e=>{ pv.q=e.target.value; renderProjectRows(p); };
+  $('briefBtn').onclick=()=>copyBrief(p.id);
+  $('editProjBtn').onclick=()=>openProjectModal('edit', p.id);
+  let lt=null;
+  const saveLlm=()=>{ p.llm={tool:$('llm_tool').value.trim(),name:$('llm_name').value.trim(),link:$('llm_link').value.trim()}; clearTimeout(lt); lt=setTimeout(saveProjects,500); };
+  ['llm_tool','llm_name','llm_link'].forEach(id=>{ $(id).oninput=saveLlm; });
+  const findIt=(id,wkid)=>{ const w=app.weeks.find(x=>x.week===wkid); return {w, it:w&&w.items.find(i=>i.id===id)}; };
+  const tb=$('ptb');
+  tb.addEventListener('change',e=>{
+    const id=e.target.dataset.id, wkid=e.target.dataset.week; if(!id) return;
+    const {w,it}=findIt(id,wkid); if(!it) return;
+    if(e.target.classList.contains('chk')){ it.done=e.target.checked; scheduleSave(w,true); renderProjectRows(p); }
+    else if(e.target.classList.contains('plan')){ it.plan=e.target.value; if(e.target.value==="Done") it.done=true; scheduleSave(w,true); renderProjectRows(p); }
+  });
+  tb.addEventListener('input',e=>{ const id=e.target.dataset.id,wkid=e.target.dataset.week;
+    if(id&&e.target.classList.contains('notes')){ const {w,it}=findIt(id,wkid); if(it){ it.notes=e.target.value; scheduleSave(w); } } });
+}
+
+/* ---------- add / edit item modal ---------- */
+const modal=$('modal'); let editItemId=null;
+function fillProjOptions(sel){
+  $('m_proj').innerHTML=`<option value="">— none</option>`+app.projects.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(p.id)} · ${esc(p.name)}</option>`).join("");
+}
+function fillThemeOptions(sel){
+  $('m_theme').innerHTML=`<option value="">— none</option>`+app.themes.map(t=>`<option value="${t.id}" ${t.id===sel?'selected':''}>${esc(t.id)} · ${esc(t.name)}</option>`).join("");
+}
+function openModal(){            // create
+  editItemId=null; $('m_title').textContent="Add an item"; $('m_save').textContent="Save item";
+  ['m_item','m_detail','m_cat','m_ctx'].forEach(i=>$(i).value=""); $('m_due').value=""; $('m_prio').value="Medium";
+  fillProjOptions(app.view&&app.view.proj&&app.view.proj!=="all"?app.view.proj:"");
+  fillThemeOptions(app.view&&app.view.theme&&app.view.theme!=="all"?app.view.theme:"");
+  modal.classList.add('show'); $('m_item').focus();
+}
+function openItemModal(it){      // edit existing
+  if(!it) return;
+  editItemId=it.id; $('m_title').textContent="Edit item"; $('m_save').textContent="Save changes";
+  $('m_item').value=htmlDecode(it.item); $('m_detail').value=htmlDecode(it.detail==="—"?"":it.detail);
+  $('m_due').value=it.due||""; $('m_prio').value=it.prio||"Medium";
+  $('m_cat').value=htmlDecode(it.cat==="Ad-hoc"?"":it.cat); $('m_ctx').value=htmlDecode(it.ctx||"");
+  fillProjOptions(it.project||""); fillThemeOptions(it.theme||"");
+  modal.classList.add('show'); $('m_item').focus();
+}
+function closeModal(){ modal.classList.remove('show'); editItemId=null; }
+$('m_cancel').onclick=closeModal;
+modal.addEventListener('click',e=>{ if(e.target===modal) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==="Escape"){ closeModal(); closePModal(); if(typeof closeTModal==="function") closeTModal(); if(typeof closeSettings==="function") closeSettings(); } });
+$('m_save').onclick=()=>{
+  const week=app.view.week; const title=$('m_item').value.trim(); if(!title){ $('m_item').focus(); return; }
+  const f={ item:htmlEncode(title), detail:htmlEncode($('m_detail').value.trim())||"—", due:$('m_due').value||"",
+    prio:$('m_prio').value, cat:htmlEncode($('m_cat').value.trim())||"Ad-hoc", ctx:htmlEncode($('m_ctx').value.trim()),
+    project:$('m_proj').value||null, theme:$('m_theme').value||null };
+  if(editItemId){ const it=week.items.find(i=>i.id===editItemId); if(it) Object.assign(it,f); }
+  else { week.items.push(normalizeItem(Object.assign({id:"custom-"+Date.now(), source:"Added manually", added:true}, f))); }
+  scheduleSave(week,true); closeModal(); renderWeek(week);
+};
+
+/* ---------- project create / edit / delete ---------- */
+const pmodal=$('pmodal'); let pmMode='create', pmCtx=null;
+function openProjectModal(mode, pid, assign){
+  pmMode=mode; pmCtx=assign||null;
+  const p = mode==='edit'?proj(pid):null;
+  $('pm_title').textContent = p?('Edit '+p.id):'New project';
+  $('pm_id').value=p?p.id:''; $('pm_id').readOnly=!!p; $('pm_id').dataset.editing=p?p.id:'';
+  $('pm_prefix').value=p?(p.prefix||''):''; $('pm_prefix').readOnly=!!p;
+  if(p&&p.uid){ $('pm_uidval').textContent=p.uid; $('pm_uidline').style.display='block'; } else $('pm_uidline').style.display='none';
+  $('pm_name').value=p?p.name:''; $('pm_color').value=p?(p.color||'#2f6f4f'):'#2f6f4f';
+  $('pm_blurb').value=p?(p.blurb||''):'';
+  const llm=(p&&p.llm)||{tool:'',name:'',link:''};
+  $('pm_tool').value=llm.tool||''; $('pm_lname').value=llm.name||''; $('pm_link').value=llm.link||'';
+  $('pm_kw').value=p&&p.keywords?p.keywords.join(', '):'';
+  $('pm_delzone').style.display = p?'block':'none';
+  if(p){ const others=app.projects.filter(x=>x.id!==pid);
+    $('pm_reassign').innerHTML=`<option value="">— clear (no project)</option>`+others.map(x=>`<option value="${x.id}">${esc(x.id)} · ${esc(x.name)}</option>`).join(""); }
+  pmodal.classList.add('show'); (p?$('pm_name'):$('pm_id')).focus();
+}
+function closePModal(){ pmodal.classList.remove('show'); }
+$('pm_cancel').onclick=closePModal;
+pmodal.addEventListener('click',e=>{ if(e.target===pmodal) closePModal(); });
+$('pm_save').onclick=async()=>{
+  const id=$('pm_id').value.trim().toUpperCase().replace(/\s+/g,'-');
+  if(!id){ $('pm_id').focus(); return; }
+  const llm={tool:$('pm_tool').value.trim(), name:$('pm_lname').value.trim(), link:$('pm_link').value.trim()};
+  const kw=$('pm_kw').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(pmMode==='create'){
+    if(proj(id)){ alert('A project with ID '+id+' already exists.'); return; }
+    const prefix=($('pm_prefix').value.trim()||id).toUpperCase().replace(/\s+/g,'-');
+    const np={id, name:$('pm_name').value.trim()||id, prefix, uid:makeUid(prefix), blurb:$('pm_blurb').value.trim(), color:$('pm_color').value, llm, keywords:kw};
+    app.projects.push(np); app.projById[id]=np; await saveProjects();
+    if(pmCtx&&pmCtx.itemId&&pmCtx.weekId){ const w=app.weeks.find(x=>x.week===pmCtx.weekId); const it=w&&w.items.find(i=>i.id===pmCtx.itemId); if(it){ it.project=id; scheduleSave(w,true); } }
+  } else {
+    const p=proj($('pm_id').dataset.editing);
+    if(p){ p.name=$('pm_name').value.trim()||p.id; p.color=$('pm_color').value; p.blurb=$('pm_blurb').value.trim(); p.llm=llm; p.keywords=kw; await saveProjects(); }
+  }
+  closePModal(); route();
+};
+$('pm_delete').onclick=async()=>{
+  const pid=$('pm_id').dataset.editing; if(!pid) return;
+  const target=$('pm_reassign').value||null, cnt=projItems(pid).length;
+  if(!confirm('Delete project '+pid+'? Its '+cnt+' item(s) will be '+(target?('moved to '+target):'cleared')+'.')) return;
+  app.weeks.forEach(w=>{ let t=false; w.items.forEach(i=>{ if(i.project===pid){ i.project=target; t=true; } }); if(t) scheduleSave(w,true); });
+  app.projects=app.projects.filter(x=>x.id!==pid); delete app.projById[pid];
+  await saveProjects(); closePModal(); location.hash=''; route();
+};
+
+/* ---------- theme create / edit / delete ---------- */
+const tmodal=$('tmodal'); let tmMode='create', tmCtx=null;
+function openThemeModal(mode, tid, assign){
+  tmMode=mode; tmCtx=assign||null;
+  const t = mode==='edit'?theme(tid):null;
+  $('tm_title').textContent = t?('Edit '+t.id):'New theme';
+  $('tm_id').value=t?t.id:''; $('tm_id').readOnly=!!t; $('tm_id').dataset.editing=t?t.id:'';
+  $('tm_name').value=t?t.name:''; $('tm_color').value=t?(t.color||'#6b7280'):'#6b7280';
+  $('tm_blurb').value=t?(t.blurb||''):'';
+  $('tm_kw').value=t&&t.keywords?t.keywords.join(', '):'';
+  $('tm_delzone').style.display = t?'block':'none';
+  if(t){ const others=app.themes.filter(x=>x.id!==tid);
+    $('tm_reassign').innerHTML=`<option value="">— clear (no theme)</option>`+others.map(x=>`<option value="${x.id}">${esc(x.id)} · ${esc(x.name)}</option>`).join(""); }
+  tmodal.classList.add('show'); (t?$('tm_name'):$('tm_id')).focus();
+}
+function closeTModal(){ tmodal.classList.remove('show'); }
+$('tm_cancel').onclick=closeTModal;
+tmodal.addEventListener('click',e=>{ if(e.target===tmodal) closeTModal(); });
+$('tm_save').onclick=async()=>{
+  const id=$('tm_id').value.trim().toUpperCase().replace(/\s+/g,'-');
+  if(!id){ $('tm_id').focus(); return; }
+  const kw=$('tm_kw').value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(tmMode==='create'){
+    if(theme(id)){ alert('A theme with ID '+id+' already exists.'); return; }
+    const nt={id, name:$('tm_name').value.trim()||id, color:$('tm_color').value, blurb:$('tm_blurb').value.trim(), keywords:kw};
+    app.themes.push(nt); app.themeById[id]=nt; await saveProjects();
+    if(tmCtx&&tmCtx.itemId&&tmCtx.weekId){ const w=app.weeks.find(x=>x.week===tmCtx.weekId); const it=w&&w.items.find(i=>i.id===tmCtx.itemId); if(it){ it.theme=id; scheduleSave(w,true); } }
+  } else {
+    const t=theme($('tm_id').dataset.editing);
+    if(t){ t.name=$('tm_name').value.trim()||t.id; t.color=$('tm_color').value; t.blurb=$('tm_blurb').value.trim(); t.keywords=kw; await saveProjects(); }
+  }
+  closeTModal(); route();
+};
+$('tm_delete').onclick=async()=>{
+  const tid=$('tm_id').dataset.editing; if(!tid) return;
+  const target=$('tm_reassign').value||null, cnt=themeItems(tid).length;
+  if(!confirm('Delete theme '+tid+'? Its '+cnt+' item(s) will be '+(target?('moved to '+target):'cleared')+'.')) return;
+  app.weeks.forEach(w=>{ let t=false; w.items.forEach(i=>{ if(i.theme===tid){ i.theme=target; t=true; } }); if(t) scheduleSave(w,true); });
+  app.themes=app.themes.filter(x=>x.id!==tid); delete app.themeById[tid];
+  await saveProjects(); closeTModal(); route();
+};
+
+/* ---------- AI ingest: settings + API ---------- */
+function apiKey(){ return localStorage.getItem('weektodo_apikey')||""; }
+if(localStorage.getItem('weektodo_model')==="claude-opus-4-8") localStorage.setItem('weektodo_model',"claude-fable-5");
+function apiModel(){ return localStorage.getItem('weektodo_model')||"claude-fable-5"; }
+function apiPersona(){ return (localStorage.getItem('weektodo_persona')||"").trim(); }
+async function anthropic(body){
+  const key=apiKey(); if(!key) throw new Error("No API key set — open ⚙ AI and add one.");
+  const model=apiModel();
+  const headers={'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+  const payload=Object.assign({model}, body);
+  if(model.startsWith('claude-fable')||model.startsWith('claude-mythos')){
+    // Fable 5 safety classifiers can decline benign requests; retry on Opus inside the same call
+    headers['anthropic-beta']='server-side-fallback-2026-06-01';
+    payload.fallbacks=[{model:'claude-opus-4-8'}];
+  }
+  const res=await fetch('https://api.anthropic.com/v1/messages',{ method:'POST', headers, body:JSON.stringify(payload) });
+  if(!res.ok){ let t=""; try{t=await res.text();}catch(e){} throw new Error('HTTP '+res.status+(t?': '+t.slice(0,400):'')); }
+  const j=await res.json();
+  if(j.stop_reason==="refusal") throw new Error("Model declined the request"+(j.stop_details&&j.stop_details.explanation?": "+j.stop_details.explanation:"."));
+  return j;
+}
+/* ---- file readers for ingest ---- */
+function readAsBase64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||""); r.onerror=rej; r.readAsDataURL(file); }); }
+function emlToText(raw){
+  const hm=raw.match(/^[\s\S]*?\r?\n\r?\n/); const head=hm?hm[0]:"";
+  const g=re=>((head.match(re)||[])[1]||"").trim();
+  const subj=g(/^subject:\s*(.*)$/im), from=g(/^from:\s*(.*)$/im), to=g(/^to:\s*(.*)$/im), date=g(/^date:\s*(.*)$/im);
+  let body=raw.slice(head.length);
+  body=body.replace(/(?:^[A-Za-z0-9+\/=]{60,}\r?\n){3,}/gm,"\n[attachment omitted]\n");   // drop base64 blobs
+  body=body.replace(/=\r?\n/g,"").replace(/=([0-9A-Fa-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16))); // quoted-printable
+  if(/<\/?(html|body|div|p|table|span|br)\b/i.test(body)) body=body.replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<[^>]+>/g," ");
+  body=body.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#39;/g,"'").replace(/&quot;/g,'"');
+  body=body.replace(/[ \t]+/g," ").replace(/(\r?\n\s*){3,}/g,"\n\n").trim();
+  return `From: ${from}\nTo: ${to}\nDate: ${date}\nSubject: ${subj}\n\n${body}`.slice(0,7000);
+}
+async function fileToBlocks(name, handle){
+  const file=await handle.getFile(), ext=(name.split('.').pop()||"").toLowerCase();
+  if(["png","jpg","jpeg","gif","webp"].includes(ext)){
+    const b64=await readAsBase64(file), mt=ext==="jpg"?"image/jpeg":"image/"+ext;
+    return [{type:"text",text:`\n--- IMAGE: ${name} ---`},{type:"image",source:{type:"base64",media_type:mt,data:b64}}];
+  }
+  if(ext==="pdf"){ const b64=await readAsBase64(file); return [{type:"text",text:`\n--- PDF: ${name} ---`},{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}]; }
+  let text=await file.text();
+  if(ext==="eml") text=emlToText(text);
+  else if(ext==="docx") text=`[Word doc "${name}" — in-browser text extraction not yet supported; consider its title as context.]`;
+  else text=text.slice(0,12000);
+  return [{type:"text",text:`\n--- FILE: ${name} ---\n${text}`}];
+}
+
+/* ---- the ingest pipeline ---- */
+// a file counts as source material unless it's hidden, an app artifact (todo-*.json),
+// or a script byproduct (_review_bundle.txt etc.)
+function isSourceFile(n,h){ return h.kind==="file" && !n.startsWith(".") && !n.startsWith("_") && !/^todo-/i.test(n); }
+function buildIngestSys(lbl){
+  const themeList=app.themes.length? app.themes.map(t=>`  ${t.id} — ${t.name}: ${t.blurb||""}`).join("\n") : "  (none defined yet — set theme to null)";
+  const projList=app.projects.length? app.projects.map(p=>`  ${p.id} — ${p.name}: ${p.blurb||""}`).join("\n") : "  (none defined yet — set project to null)";
+  const persona=apiPersona();
+  return `You build a weekly to-do list for the user.${persona?"\nAbout the user: "+persona:""}
+From the source material (meeting transcripts, emails, screenshots, PDFs) extract concrete action items that are the USER'S to act on. Be specific and concise; merge duplicates; ignore pure FYIs, newsletters, and automated notices unless they require an action from the user.
+For each item set: a short "detail" (one sentence), a "due" date if stated or clearly implied (YYYY-MM-DD; this week is ${lbl}), "prio" (High/Medium/Low), a short "cat", a "theme" = the matching high-level area/department id from this list, or null:
+${themeList}
+and a "project" = the matching specific workstream/initiative id from this list, or null:
+${projList}
+Theme and project are independent — a task can have one, both, or neither. Return results ONLY through the save_week tool. Do NOT include carry-over items from earlier weeks — those are added automatically.`;
+}
+const SAVE_WEEK_TOOL={name:"save_week",description:"Save the extracted action items for the week.",input_schema:{type:"object",properties:{items:{type:"array",items:{type:"object",properties:{
+  item:{type:"string",description:"Imperative task title"}, detail:{type:"string"}, due:{type:"string",description:"YYYY-MM-DD or empty"},
+  prio:{type:"string",enum:["High","Medium","Low"]}, theme:{type:["string","null"]}, project:{type:["string","null"]}, cat:{type:"string"}
+},required:["item"]}}},required:["items"]}};
+function toolItemsToNormalized(raw, sourceLabel){
+  return raw.map(it=>normalizeItem({
+    id:"ai-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    item:htmlEncode(it.item||"(untitled)"), detail:htmlEncode((it.detail||"").trim())||"—", due:(it.due||"").slice(0,10),
+    prio:["High","Medium","Low"].includes(it.prio)?it.prio:"Medium",
+    project:(it.project&&app.projById[it.project])?it.project:null,
+    theme:(it.theme&&app.themeById[it.theme])?it.theme:null,
+    cat:htmlEncode((it.cat||"").trim()), source:sourceLabel, added:false
+  }));
+}
+async function ingestWeek(entry){
+  if(!apiKey()){ openSettings(); return; }
+  const s=m=>{ const el=$('ingestStatus'); if(el){ el.textContent=m; } };
+  document.querySelectorAll('.ingbtn').forEach(b=>b.disabled=true);
+  try{
+    s("Reading files…");
+    const blocks=[], srcNames=[];
+    for await (const [n,h] of entry.dir.entries()){
+      if(!isSourceFile(n,h)) continue;
+      srcNames.push(n);
+      try{ (await fileToBlocks(n,h)).forEach(b=>blocks.push(b)); }
+      catch(e){ blocks.push({type:"text",text:`\n--- ${n}: could not read (${e.message}) ---`}); }
+    }
+    if(!blocks.length) throw new Error("No readable source files in "+entry.name);
+    const lbl=weekLabel(entry.name), prior=app.weeks[0];
+    const sys=buildIngestSys(lbl);
+    s("Asking Claude ("+apiModel()+")… ~30–60s");
+    const tool=SAVE_WEEK_TOOL;
+    const j=await anthropic({max_tokens:16000, system:sys, tools:[tool], tool_choice:{type:"tool",name:"save_week"},
+      messages:[{role:"user", content:[{type:"text",text:`Week ${entry.name} (${lbl}). Source material:`}, ...blocks]}]});
+    const tu=(j.content||[]).find(c=>c.type==="tool_use");
+    if(!tu||!tu.input||!Array.isArray(tu.input.items)) throw new Error("Model did not return items. "+JSON.stringify(j).slice(0,200));
+    let items=toolItemsToNormalized(tu.input.items, "AI-extracted ("+apiModel()+")");
+    const newCount=items.length;
+    if(prior){
+      prior.items.filter(i=>!i.dismissed && !i.done && i.plan!=="Not doing").forEach(i=>{
+        items.push(Object.assign({}, i, {carriedFrom:prior.week, carryAge:(i.carryAge||0)+1, plan:"", dismissed:null,
+          subtasks:(i.subtasks||[]).map(st=>Object.assign({},st))}));
+      });
+    }
+    s("Writing todo-state.json…");
+    const state={ week:entry.name, label:lbl, dates:"Ingested "+new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),
+      generated:new Date().toISOString().slice(0,10), updated:new Date().toISOString(), schema:1, sources:srcNames, items };
+    const fh=await entry.dir.getFileHandle("todo-state.json",{create:true});
+    const w=await fh.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close();
+    s(`Done ✓ ${newCount} new${prior?` + ${items.length-newCount} carried over`:''}`);
+    await loadAll(); location.hash="week/"+encodeURIComponent(entry.name); route();
+  }catch(e){ console.error(e); s("✗ "+(e.message||e)); document.querySelectorAll('.ingbtn').forEach(b=>b.disabled=false); }
+}
+
+/* ---- re-scan: pick up files dropped into an already-ingested week folder ---- */
+async function rescanWeek(week){
+  if(!apiKey()){ openSettings(); return; }
+  const btn=$('rescanBtn'), st=$('rescanStatus');
+  const s=m=>{ if(st) st.textContent=m; };
+  if(btn) btn.disabled=true;
+  try{
+    s("Checking folder…");
+    const known=new Set(week.sources||[]);
+    const firstScan=!week.sources;           // week predates source tracking — scan everything, dedupe via prompt
+    const blocks=[], newNames=[], allNames=[];
+    for await (const [n,h] of week._dir.entries()){
+      if(!isSourceFile(n,h)) continue;
+      allNames.push(n);
+      if(!firstScan && known.has(n)) continue;
+      newNames.push(n);
+      try{ (await fileToBlocks(n,h)).forEach(b=>blocks.push(b)); }
+      catch(e){ blocks.push({type:"text",text:`\n--- ${n}: could not read (${e.message}) ---`}); }
+    }
+    if(!blocks.length){ week.sources=allNames; scheduleSave(week,true); s("No new files found ✓"); if(btn) btn.disabled=false; return; }
+    // tell the model what's already on the list so it only returns genuinely new items
+    const strip=x=>htmlDecode(String(x||""));
+    const live=week.items.filter(i=>!i.dismissed).map(i=>`  - ${strip(i.item)}`).join("\n");
+    const dis=week.items.filter(i=>i.dismissed).map(i=>`  - ${strip(i.item)} (removed: ${i.dismissed.reason})`).join("\n");
+    const sys=buildIngestSys(week.label||weekLabel(week.week))+`
+
+This is a RE-SCAN: the week's list already exists and you are only processing newly added source files.
+Items ALREADY on the list — do NOT return these or close variants of them:
+${live||"  (none)"}`+(dis?`
+Items the user REMOVED as not relevant — do NOT re-surface these or close variants; respect the reasons:
+${dis}`:"")+`
+Return ONLY genuinely new action items from the new source material. If there are none, return an empty items array.`;
+    s(`Asking Claude about ${newNames.length} new file${newNames.length>1?"s":""}…`);
+    const j=await anthropic({max_tokens:16000, system:sys, tools:[SAVE_WEEK_TOOL], tool_choice:{type:"tool",name:"save_week"},
+      messages:[{role:"user", content:[{type:"text",text:`Week ${week.week} (${week.label||""}). New source material:`}, ...blocks]}]});
+    const tu=(j.content||[]).find(c=>c.type==="tool_use");
+    if(!tu||!tu.input||!Array.isArray(tu.input.items)) throw new Error("Model did not return items. "+JSON.stringify(j).slice(0,200));
+    const stamp=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"});
+    const items=toolItemsToNormalized(tu.input.items, "AI re-scan "+stamp+" ("+apiModel()+")");
+    week.items.push(...items);
+    week.sources=allNames;
+    scheduleSave(week,true);
+    s(items.length? `Added ${items.length} new item${items.length>1?"s":""} ✓` : "Scanned — nothing new to add ✓");
+    renderRows(week);
+  }catch(e){ console.error(e); s("✗ "+(e.message||e)); }
+  if(btn) btn.disabled=false;
+}
+
+const setmodal=$('setmodal');
+function openSettings(){ $('set_key').value=apiKey(); $('set_model').value=apiModel(); $('set_persona').value=apiPersona(); $('set_result').textContent=""; setmodal.classList.add('show'); }
+function closeSettings(){ setmodal.classList.remove('show'); }
+$('setBtn').onclick=openSettings;
+$('set_cancel').onclick=closeSettings;
+setmodal.addEventListener('click',e=>{ if(e.target===setmodal) closeSettings(); });
+$('set_save').onclick=()=>{ localStorage.setItem('weektodo_apikey',$('set_key').value.trim()); localStorage.setItem('weektodo_model',$('set_model').value.trim()||"claude-fable-5"); localStorage.setItem('weektodo_persona',$('set_persona').value.trim()); closeSettings(); };
+$('set_test').onclick=async()=>{
+  localStorage.setItem('weektodo_apikey',$('set_key').value.trim());
+  localStorage.setItem('weektodo_model',$('set_model').value.trim()||"claude-fable-5");
+  localStorage.setItem('weektodo_persona',$('set_persona').value.trim());
+  const r=$('set_result'); r.style.color="var(--muted)"; r.textContent="Testing…";
+  try{
+    const j=await anthropic({max_tokens:512, messages:[{role:'user',content:'Reply with the single word: OK'}]});
+    const txt=(((j.content||[]).find(c=>c.type==='text')||{}).text||"").trim();
+    r.style.color="var(--accent)"; r.textContent="✓ Connected — model replied “"+txt+"”. Direct browser calls work.";
+  }catch(e){
+    r.style.color="var(--hi)";
+    r.textContent="✗ "+ (String(e.message||e).includes("Failed to fetch")
+      ? "Blocked (likely CORS from a local file). Paste me this and we’ll add a tiny local proxy."
+      : (e.message||e));
+  }
+};
+
+/* ---------- boot ---------- */
+$('connBtn').onclick=connect;
+$('homeBtn').onclick=()=>{ location.hash=''; };
+$('projBtn').onclick=()=>{ location.hash='projects'; };
+$('pbar').addEventListener('click',e=>{ const b=e.target.closest('.pchipbtn'); if(!b) return;
+  const pid=b.dataset.pid; location.hash = (pid==='__all__'?'':'project/'+encodeURIComponent(pid)); });
+
+/* ===== DEMO MODE — embedded fake data so the app renders filled-out without a folder or API key ===== */
+writeWeek=async function(){ flashSaved(); };
+saveProjects=async function(){ flashSaved(); };
+connect=async function(){ alert("Demo page — no folder connection. Use Home.html for the real app."); };
+tryRestore=async function(){
+  app.themes=[
+    {id:"PROD",  name:"Product",    color:"#2f6f4f", blurb:"Core product work: roadmap, launches, discovery.", keywords:["roadmap","launch"]},
+    {id:"LEGAL", name:"Legal",      color:"#8a4baf", blurb:"Contracts, redlines, compliance.", keywords:["contract","redline","msa"]},
+    {id:"OPS",   name:"Operations", color:"#d97706", blurb:"Vendors, internal process, keeping the lights on.", keywords:["vendor","process"]}
+  ];
+  app.projects=[
+    {id:"ACME-RENEWAL", name:"Acme Corp renewal",   prefix:"ACME", uid:"ACME-260710-001", color:"#b3261e",
+     blurb:"Renew the Acme Corp contract before the Aug 14 deadline; legal redlines in flight.",
+     llm:{tool:"Claude",name:"Acme renewal war room",link:""}, keywords:["acme","renewal"]},
+    {id:"ONBOARD-V2",   name:"Onboarding flow v2",  prefix:"ONB",  uid:"ONB-260622-002",  color:"#3a6ea5",
+     blurb:"Redesign of the self-serve onboarding flow; Priya leads design, ship target end of August.",
+     llm:{tool:"",name:"",link:""}, keywords:["onboarding"]},
+    {id:"VENDOR-AI",    name:"AI vendor evaluation", prefix:"VND", uid:"VND-260601-003",  color:"#9a6a00",
+     blurb:"Evaluate AI tooling vendors: security review, pricing, pilot plan.",
+     llm:{tool:"ChatGPT",name:"Vendor eval notes",link:""}, keywords:["vendor","security questionnaire"]}
+  ];
+  app.projById={}; app.projects.forEach(p=>app.projById[p.id]=p);
+  app.themeById={}; app.themes.forEach(t=>app.themeById[t.id]=t);
+  const wk=(o)=>Object.assign(o,{items:o.items.map(normalizeItem),_dir:null,_folder:o.week});
+  app.weeks=[
+    wk({week:"WO-260803", label:"Week of August 3–7", dates:"Ingested Aug 3, 2026", schema:1,
+      sources:["monday-team-sync.txt","acme-legal-thread.eml","onboarding-review.eml"],
+      items:[
+        {id:"d1", item:"Circulate updated Q3 roadmap deck to leadership", detail:"Roadmap review moved to Thursday — deck must land in leadership inboxes before then.",
+         due:"2026-08-06", prio:"High", theme:"PROD", project:null, cat:"Exec comms", plan:"Wed",
+         ctx:"Q3 review was rescheduled from Tuesday to Thursday in Monday's team sync. Leadership wants the deck a day ahead.", source:"AI-extracted (claude-fable-5)"},
+        {id:"d2", item:"Chase legal for Acme redline turnaround date", detail:"Renewal is blocked on legal's redlines; get a committed date — contract deadline Aug 14.",
+         due:"2026-08-05", prio:"High", theme:"LEGAL", project:"ACME-RENEWAL", cat:"Contract", plan:"Mon",
+         ctx:"Marcus flagged the renewal contract is still with legal. Deadline Aug 14 leaves little slack.", source:"AI-extracted (claude-fable-5)"},
+        {id:"d3", item:"Review onboarding copy and send feedback to Priya", detail:"Committed to written feedback on the new flow's copy by Wednesday.",
+         due:"2026-08-05", prio:"Medium", theme:"PROD", project:"ONBOARD-V2", cat:"Review", plan:"Tue",
+         subtasks:[{id:"st1",text:"Review welcome screens",done:true},{id:"st2",text:"Review empty states",done:false},{id:"st3",text:"Write up feedback and send",done:false}],
+         ctx:"Priya demoed the flow in Monday's sync; copy review is the last open dependency.", source:"AI-extracted (claude-fable-5)"},
+        {id:"d4", item:"Cover Tuesday vendor check-in call for Sam", detail:"Sam is out next week — take the recurring vendor check-in on Tuesday.",
+         due:"2026-08-04", prio:"Medium", theme:"OPS", project:null, cat:"Meeting", plan:"Tue", source:"AI-extracted (claude-fable-5)"},
+        {id:"d5", item:"Finalize vendor security questionnaire", detail:"Complete the outstanding sections and return it so the pilot can be scheduled.",
+         due:"2026-08-07", prio:"Medium", theme:"OPS", project:"VENDOR-AI", cat:"Security", carriedFrom:"WO-260727", carryAge:1,
+         notes:"waiting on IT for two answers", source:"AI-extracted (claude-fable-5)"},
+        {id:"d6", item:"Draft August all-hands product update", detail:"Three slides: shipped, in flight, next.", prio:"Low", theme:"PROD", cat:"Comms", plan:"Fri", source:"AI re-scan Aug 5 (claude-fable-5)"},
+        {id:"d7", item:"Confirm Q3 offsite venue booking", detail:"Deposit paid — confirm dates in writing.", prio:"Low", theme:"OPS", cat:"Ad-hoc", done:true, plan:"Done", source:"Added manually", added:true}
+      ]}),
+    wk({week:"WO-260727", label:"Week of July 27–31", dates:"Ingested Jul 27, 2026", schema:1,
+      sources:["standup-notes.txt","pricing-thread.eml"],
+      items:[
+        {id:"p1", item:"Send pricing proposal to Acme", detail:"Final numbers approved — send before their board meeting.", due:"2026-07-29", prio:"High", theme:"LEGAL", project:"ACME-RENEWAL", cat:"Contract", done:true, plan:"Done", source:"AI-extracted (claude-fable-5)"},
+        {id:"p2", item:"Approve onboarding v2 design spec", detail:"Sign off so build can start Monday.", prio:"High", theme:"PROD", project:"ONBOARD-V2", cat:"Review", done:true, plan:"Done", source:"AI-extracted (claude-fable-5)"},
+        {id:"p3", item:"Finalize vendor security questionnaire", detail:"Complete the outstanding sections and return it so the pilot can be scheduled.", prio:"Medium", theme:"OPS", project:"VENDOR-AI", cat:"Security", plan:"Next wk", source:"AI-extracted (claude-fable-5)"},
+        {id:"p4", item:"Book 1:1s with new team members", detail:"Two new joiners this month.", prio:"Low", theme:"OPS", cat:"People", done:true, plan:"Done", source:"AI-extracted (claude-fable-5)"}
+      ]})
+  ];
+  app.pending=[];
+  app.root={name:"week-prep (demo)"};
+  setStatus("on","week-prep (demo) · 2 weeks");
+  return true;
+};
+
+(async()=>{ const ok=await tryRestore(); route(); })();
+</script>
+</body>
+</html>
