@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# personal data — never commit real week folders or state
+WO-*/
+todo-state.json
+projects.json
+_review_bundle.txt
+todo-feedback-*.json
+
+# keep the sample week
+!sample-week/WO-*/
