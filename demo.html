@@ -1111,15 +1111,54 @@ async function anthropic(body){
 /* ---- file readers for ingest ---- */
 function readAsBase64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]||""); r.onerror=rej; r.readAsDataURL(file); }); }
 function emlToText(raw){
-  const hm=raw.match(/^[\s\S]*?\r?\n\r?\n/); const head=hm?hm[0]:"";
-  const g=re=>((head.match(re)||[])[1]||"").trim();
-  const subj=g(/^subject:\s*(.*)$/im), from=g(/^from:\s*(.*)$/im), to=g(/^to:\s*(.*)$/im), date=g(/^date:\s*(.*)$/im);
-  let body=raw.slice(head.length);
-  body=body.replace(/(?:^[A-Za-z0-9+\/=]{60,}\r?\n){3,}/gm,"\n[attachment omitted]\n");   // drop base64 blobs
-  body=body.replace(/=\r?\n/g,"").replace(/=([0-9A-Fa-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16))); // quoted-printable
+  // proper-enough MIME parsing: walk multipart boundaries and decode each part
+  // per its Content-Transfer-Encoding (base64 bodies are common from Outlook).
+  const splitMsg=s=>{ const m=s.match(/\r?\n\r?\n/); return m? [s.slice(0,m.index), s.slice(m.index+m[0].length)] : [s,""]; };
+  const unfold=h=>h.replace(/\r?\n[ \t]+/g," ");
+  const hdr=(h,name)=>{ const m=unfold(h).match(new RegExp("^"+name+":\\s*(.*)$","im")); return m?m[1].trim():""; };
+  const b64ToUtf8=b64=>{ const bin=atob(b64.replace(/[^A-Za-z0-9+/=]/g,"")); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return new TextDecoder("utf-8").decode(u); };
+  const deQP=s=>s.replace(/=\r?\n/g,"").replace(/=([0-9A-Fa-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16)));
+  const decWord=s=>s.replace(/=\?[^?]+\?([BbQq])\?([^?]*)\?=/g,(m,enc,txt)=>{
+    try{ return enc.toUpperCase()==="B" ? b64ToUtf8(txt) : deQP(txt.replace(/_/g," ")); }catch(e){ return m; }
+  });
+  const decodeBody=(headers,body)=>{
+    const enc=hdr(headers,"content-transfer-encoding").toLowerCase();
+    if(enc==="base64"){ try{ return b64ToUtf8(body); }catch(e){ return ""; } }
+    if(enc==="quoted-printable") return deQP(body);
+    return body;
+  };
+  const collect=(headers,body,out,depth)=>{
+    if(depth>6) return;
+    const ctFull=hdr(headers,"content-type"), ct=ctFull.toLowerCase();
+    const bm=ctFull.match(/boundary="?([^";]+)"?/i);
+    if(ct.startsWith("multipart/") && bm){
+      for(const p of body.split("--"+bm[1]).slice(1)){
+        if(p.startsWith("--")) break;                       // closing delimiter
+        const [ph,pb]=splitMsg(p.replace(/^\r?\n/,""));
+        collect(ph,pb,out,depth+1);
+      }
+      return;
+    }
+    const disp=hdr(headers,"content-disposition");
+    if(/^attachment/i.test(disp)){
+      const nm=(disp.match(/filename="?([^";]+)"?/i)||ctFull.match(/name="?([^";]+)"?/i)||[])[1];
+      out.push({type:"att", text:"[attachment: "+(nm||"file")+"]"}); return;
+    }
+    if(ct.startsWith("text/plain") || !ct) out.push({type:"plain", text:decodeBody(headers,body)});
+    else if(ct.startsWith("text/html")) out.push({type:"html", text:decodeBody(headers,body)});
+    // other content types (images etc.) are skipped
+  };
+  const [head,rawBody]=splitMsg(raw);
+  const subj=decWord(hdr(head,"subject")), from=decWord(hdr(head,"from")), to=decWord(hdr(head,"to")), date=hdr(head,"date");
+  const parts=[]; collect(head,rawBody,parts,0);
+  const atts=parts.filter(p=>p.type==="att").map(p=>p.text);
+  let body=parts.filter(p=>p.type==="plain").map(p=>p.text).join("\n").trim();
+  if(!body) body=parts.filter(p=>p.type==="html").map(p=>p.text).join("\n").trim();
+  if(!body) body=rawBody.replace(/(?:^[A-Za-z0-9+\/=]{60,}\r?\n){3,}/gm,"\n[binary content omitted]\n"); // last resort
   if(/<\/?(html|body|div|p|table|span|br)\b/i.test(body)) body=body.replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<[^>]+>/g," ");
   body=body.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&#39;/g,"'").replace(/&quot;/g,'"');
   body=body.replace(/[ \t]+/g," ").replace(/(\r?\n\s*){3,}/g,"\n\n").trim();
+  if(atts.length) body+="\n\n"+atts.join("\n");
   return `From: ${from}\nTo: ${to}\nDate: ${date}\nSubject: ${subj}\n\n${body}`.slice(0,7000);
 }
 async function fileToBlocks(name, handle){
