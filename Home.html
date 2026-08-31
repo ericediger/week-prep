@@ -1253,6 +1253,18 @@ async function rescanWeek(week){
   if(btn) btn.disabled=true;
   try{
     s("Checking folder…");
+    // re-read state from disk first — another tab, device, or external edit may have
+    // changed it since this page loaded, and scanning against stale memory would
+    // both miss files and clobber those changes on save.
+    try{
+      const fh=await week._dir.getFileHandle("todo-state.json");
+      const disk=JSON.parse(await (await fh.getFile()).text());
+      if(disk.updated!==week.updated){
+        week.items=(disk.items||[]).map(normalizeItem);
+        week.sources=disk.sources;
+        week.updated=disk.updated;
+      }
+    }catch(e){}
     const known=new Set(week.sources||[]);
     const firstScan=!week.sources;           // week predates source tracking — scan everything, dedupe via prompt
     const blocks=[], newNames=[], allNames=[];
