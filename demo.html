@@ -190,6 +190,27 @@
   .gate h2{margin:0 0 8px;font-size:19px}
   .gate p{font-size:13.5px;color:#3c4147;margin:8px 0}
   .gate .big{font-size:14px;margin-top:16px}
+
+  /* assistant drawer */
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:100%;background:var(--card);border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.12);display:none;flex-direction:column;z-index:40}
+  .drawer.show{display:flex}
+  @media (min-width:1560px){ body.dopen .wrap{margin-right:480px} }
+  .dhead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .dhead h3{margin:0;font-size:14px;flex:1;display:flex;align-items:center;gap:8px}
+  .dmsgs{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .msg{max-width:94%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.5}
+  .msg.user{align-self:flex-end;background:var(--accentbg);border:1px solid var(--accentline);white-space:pre-wrap}
+  .msg.asst{align-self:flex-start;background:#fbfbfc;border:1px solid var(--line)}
+  .msg p{margin:0 0 6px} .msg p:last-child{margin-bottom:0} .msg ul,.msg ol{margin:4px 0 6px;padding-left:20px} .msg h3{font-size:13.5px;margin:8px 0 4px}
+  .msg code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#f0f1f3;padding:0 4px;border-radius:4px}
+  .prop{align-self:stretch;border:1px solid #f0dca0;background:#fff8e8;border-radius:10px;padding:9px 12px;font-size:13px}
+  .prop.applied{border-color:var(--accentline);background:var(--accentbg)} .prop.skipped{opacity:.55} .prop.error{border-color:#e8b4b0;background:var(--hibg)}
+  .prop .pt{font-weight:600;margin-bottom:2px} .prop .pd{color:#5a4a1a;font-size:12.5px;line-height:1.45}
+  .prop .pb,.dall{display:flex;gap:6px;margin-top:8px}
+  .dfoot{border-top:1px solid var(--line);padding:10px 12px}
+  .dfoot textarea{width:100%;min-height:66px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13.5px;resize:vertical;background:var(--card);color:var(--ink)}
+  .dfoot .drow{display:flex;align-items:center;gap:8px;margin-top:6px}
+  .dstatus{font-size:12px;color:var(--muted);flex:1}
 </style>
 </head>
 <body>
@@ -202,6 +223,7 @@
     <button class="conn ghost" id="homeBtn" title="Home">Home</button>
     <button class="conn ghost" id="projBtn" title="All projects">Projects</button>
     <span class="spacer"></span>
+    <button class="conn ghost" id="agentBtn" title="Chat with your assistant about this week">✦ Assistant</button>
     <button class="conn ghost" id="setBtn" title="AI ingest settings">⚙ AI</button>
     <button class="conn ghost" id="connBtn">Connect folder</button>
   </div>
@@ -278,6 +300,16 @@
   </div>
 </div>
 
+<!-- assistant drawer -->
+<div class="drawer" id="drawer">
+  <div class="dhead"><h3>✦ Assistant <span class="wkbadge" id="dweek"></span></h3><button class="editp" id="dnew" title="Delete this week's conversation and start over">New chat</button><button class="editp" id="dclose" title="Close">✕</button></div>
+  <div class="dmsgs" id="dmsgs"></div>
+  <div class="dfoot">
+    <textarea id="dinput" placeholder="Plan my day… · What should move? · I finished X, what's next?  (Enter to send, Shift+Enter for a new line)"></textarea>
+    <div class="drow"><span class="dstatus" id="dstatus"></span><button class="brief" id="dsend">Send</button></div>
+  </div>
+</div>
+
 <!-- AI ingest settings modal -->
 <div class="modal" id="setmodal">
   <div class="sheet">
@@ -286,6 +318,7 @@
     <div class="field"><label>Anthropic API key</label><input id="set_key" type="password" placeholder="sk-ant-…" autocomplete="off"></div>
     <div class="field"><label>Model</label><input id="set_model" placeholder="claude-fable-5"></div>
     <div class="field"><label>About you (optional — helps the AI spot which action items are yours)</label><textarea id="set_persona" placeholder="e.g. Jane, a product director at Acme Corp"></textarea></div>
+    <div class="field"><label>✦ Assistant prompt (its standing instructions — the live task list is appended automatically; clear the box to restore the default)</label><textarea id="set_agent_prompt" style="min-height:140px;font-size:12.5px"></textarea></div>
     <div style="display:flex;align-items:center;gap:12px;margin:4px 0 8px">
       <button class="btn-save" id="set_test" style="background:var(--card);color:var(--accent);border:1px solid var(--accentline)">Test connection</button>
       <span id="set_result" style="font-size:12.5px"></span>
@@ -1337,12 +1370,12 @@ Return ONLY genuinely new action items from the new source material. If there ar
 }
 
 const setmodal=$('setmodal');
-function openSettings(){ $('set_key').value=apiKey(); $('set_model').value=apiModel(); $('set_persona').value=apiPersona(); $('set_result').textContent=""; setmodal.classList.add('show'); }
+function openSettings(){ $('set_key').value=apiKey(); $('set_model').value=apiModel(); $('set_persona').value=apiPersona(); $('set_agent_prompt').value=agentPrompt(); $('set_result').textContent=""; setmodal.classList.add('show'); }
 function closeSettings(){ setmodal.classList.remove('show'); }
 $('setBtn').onclick=openSettings;
 $('set_cancel').onclick=closeSettings;
 setmodal.addEventListener('click',e=>{ if(e.target===setmodal) closeSettings(); });
-$('set_save').onclick=()=>{ localStorage.setItem('weektodo_apikey',$('set_key').value.trim()); localStorage.setItem('weektodo_model',$('set_model').value.trim()||"claude-fable-5"); localStorage.setItem('weektodo_persona',$('set_persona').value.trim()); closeSettings(); };
+$('set_save').onclick=()=>{ localStorage.setItem('weektodo_apikey',$('set_key').value.trim()); localStorage.setItem('weektodo_model',$('set_model').value.trim()||"claude-fable-5"); localStorage.setItem('weektodo_persona',$('set_persona').value.trim()); localStorage.setItem('weektodo_agent_prompt',$('set_agent_prompt').value.trim()); closeSettings(); };
 $('set_test').onclick=async()=>{
   localStorage.setItem('weektodo_apikey',$('set_key').value.trim());
   localStorage.setItem('weektodo_model',$('set_model').value.trim()||"claude-fable-5");
@@ -1360,12 +1393,255 @@ $('set_test').onclick=async()=>{
   }
 };
 
+/* ---------- in-page assistant: chat with the week; every change is an approval card ---------- */
+const DEFAULT_AGENT_PROMPT=`You are my strategic Executive Assistant and Productivity Coach. Help me achieve the outcomes that matter most while protecting my time, attention, commitments, and sustainable capacity.
+Be direct, concise, and willing to challenge me. Challenge my choices with evidence and explicit trade-offs. Avoid performative toughness, guilt, or productivity theater.
+1. Establish what matters
+Use my stated goals, deadlines, commitments, and constraints to assess priorities. Evaluate tasks by:
+* Contribution to an important outcome.
+* Consequences of delay.
+* Dependencies and people they unblock.
+* Whether they require my judgment or authority.
+* Effort relative to expected value.
+Do not equate urgency, visibility, or ease with importance. Do not dismiss administration, relationship building, thinking time, or recovery simply because their value is indirect.
+If essential context is missing, ask no more than three targeted questions. Otherwise, proceed with clearly stated assumptions. Distinguish hard deadlines from preferences.
+2. Choose the daily priorities
+Select up to three meaningful outcomes for the day. Do not fill all three slots unless capacity supports them.
+For each, specify:
+* Why it matters today.
+* The next concrete action.
+* What "done" means.
+* A realistic effort estimate, identifying uncertainty where relevant.
+Distinguish work I must personally do from work I should delegate, simplify, defer, or drop. Do not invent available delegates.
+3. Build a feasible schedule
+Work around fixed commitments and actual available hours. Account for dependencies and energy requirements. Batch similar tasks and protect focused work.
+Leave approximately 20% of otherwise available work time unallocated for interruptions and overruns, adjusting when circumstances warrant. Include breaks.
+If the work exceeds capacity, explicitly identify what moves. Do not make everything fit by assuming unrealistically short durations.
+4. Challenge low-value work
+When I propose work that appears disproportionate to its value:
+* Explain the concern and the higher-priority work it would displace.
+* Recommend a concrete alternative: reduce scope, time-box, delegate, defer, or stop.
+* State what context could change your assessment.
+Distinguish necessary preparation from avoidant overplanning. When I add a task, explain its impact on the existing plan. If I knowingly choose the trade-off, adapt without repeatedly arguing.
+5. Support execution and review
+When I report progress, compare it with the plan and identify the actual blocker: unclear next steps, dependencies, underestimated effort, competing demands, or avoidance.
+Adjust scope and sequencing without blame. Keep unfinished work visible, but reassess its priority before carrying it forward.
+Suggest useful check-in times. Only promise proactive check-ins if scheduling or notification tools are available and configured; otherwise, tell me when to return.
+6. Respect action boundaries
+Planning and recommendations do not authorize external actions. Follow my established permissions for calendar changes, messages, or other actions affecting people or systems. Never claim an action was completed unless it actually succeeded.
+Input
+I may provide a raw brain dump of tasks, deadlines, meetings, available time, and energy level. Organize it without requiring me to reformat it.
+Default output
+Keep the response compact and proportional to the complexity of the day.
+* The Hit List: Up to three priority outcomes, with rationale, next action, definition of done, and estimated effort.
+* The Schedule: A feasible time-blocked plan, including buffers and breaks.
+* The Chopping Block: What to delegate, simplify, defer, or drop, with the trade-off and any revisit date or trigger.
+* Start Here: The single action I should take next.
+For progress updates or small questions, respond directly rather than repeating the entire plan.`;
+function agentPrompt(){ return (localStorage.getItem('weektodo_agent_prompt')||"").trim()||DEFAULT_AGENT_PROMPT; }
+const AGENT_MUTATING=new Set(["update_item","add_item","remove_item","restore_item","add_subtask"]);
+const AGENT_TOOLS=[
+  {name:"update_item",description:"Propose changes to an existing item (plan day, priority, done, due date, notes, title, detail, theme, project). The user must approve the card before it is applied.",
+   input_schema:{type:"object",properties:{id:{type:"string"},changes:{type:"object",properties:{
+     plan:{type:"string",enum:PLAN_OPTS,description:"Day to do it, or Next wk / Done / Not doing; empty string clears"},prio:{type:"string",enum:PRIOS},done:{type:"boolean"},
+     due:{type:"string",description:"YYYY-MM-DD, or empty to clear"},notes:{type:"string"},item:{type:"string",description:"new title"},detail:{type:"string"},
+     theme:{type:["string","null"]},project:{type:["string","null"]}},additionalProperties:false}},required:["id","changes"]}},
+  {name:"add_item",description:"Propose a new item for this week. The user must approve it.",
+   input_schema:{type:"object",properties:{item:{type:"string"},detail:{type:"string"},due:{type:"string"},prio:{type:"string",enum:PRIOS},plan:{type:"string",enum:PLAN_OPTS},
+     theme:{type:["string","null"]},project:{type:["string","null"]},cat:{type:"string"},ctx:{type:"string",description:"background / why"}},required:["item"]}},
+  {name:"remove_item",description:"Propose removing an item from the list (it can be restored later). Always give the reason. The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string"},reason:{type:"string"}},required:["id","reason"]}},
+  {name:"restore_item",description:"Propose restoring a previously removed item. The user must approve.",input_schema:{type:"object",properties:{id:{type:"string"}},required:["id"]}},
+  {name:"add_subtask",description:"Propose a checklist subtask under an item. The user must approve.",input_schema:{type:"object",properties:{id:{type:"string"},text:{type:"string"}},required:["id","text"]}},
+  {name:"read_week",description:"Read another week's full list (e.g. last week). No approval needed.",input_schema:{type:"object",properties:{week:{type:"string",description:"WO-YYMMDD"}},required:["week"]}}
+];
+const agent={week:null, messages:[], decisions:{}, descs:{}, busy:false, pending:null};   // descs: card text captured before a change is applied
+
+function agentWeek(){ const h=location.hash.replace(/^#/,""); if(h.startsWith("week/")&&app.view.week) return app.view.week; return app.weeks[0]||null; }
+function weekBrief(week){
+  const dec=s=>htmlDecode(s).replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+  const live=liveItems(week), open=live.filter(i=>!isResolved(i)).sort((a,b)=>PRIO_RANK[a.prio]-PRIO_RANK[b.prio]||dueInfo(a.due).val-dueInfo(b.due).val);
+  const done=live.filter(i=>i.done), nd=live.filter(i=>i.plan==="Not doing"&&!i.done), rem=week.items.filter(i=>i.dismissed);
+  const L=[`# ${week.week} — ${week.label||""}`, `${live.length} items · ${open.length} open · ${open.filter(i=>i.prio==="High").length} high · ${done.length} done`, ``, `## Open items (${open.length}) — by priority, then due date`];
+  open.forEach((i,n)=>{
+    L.push(`${n+1}. [id:${i.id}] [${i.prio}] ${dec(i.item)}`);
+    if(i.detail&&i.detail!=="—") L.push(`   Detail: ${dec(i.detail)}`);
+    const m=[]; if(i.due) m.push("Due: "+dueInfo(i.due).txt); m.push("Plan: "+(i.plan||"not scheduled")); if(i.theme) m.push("Theme: "+i.theme); if(i.project) m.push("Project: "+i.project); if(i.cat) m.push("Category: "+dec(i.cat));
+    L.push("   "+m.join(" · "));
+    if(i.carriedFrom) L.push(`   Carried over from ${i.carriedFrom}${i.carryAge>1?` (${i.carryAge} weeks running)`:""}`);
+    const s=i.subtasks||[]; if(s.length) L.push(`   Subtasks (${s.filter(x=>x.done).length}/${s.length} done): `+s.map(x=>(x.done?"[x] ":"[ ] ")+dec(x.text)).join("; "));
+    if(i.notes) L.push(`   Notes: ${dec(i.notes)}`);
+    if(i.ctx) L.push(`   Context: ${dec(i.ctx).slice(0,600)}`);
+  });
+  if(done.length){ L.push(``,`## Done (${done.length})`); done.forEach(i=>L.push(`- [id:${i.id}] ${dec(i.item)}`)); }
+  if(nd.length){ L.push(``,`## Marked "Not doing" (${nd.length})`); nd.forEach(i=>L.push(`- [id:${i.id}] ${dec(i.item)}`)); }
+  if(rem.length){ L.push(``,`## Removed (${rem.length}) — can be restored with restore_item`); rem.forEach(i=>L.push(`- [id:${i.id}] ${dec(i.item)} (${(i.dismissed||{}).reason||""})`)); }
+  return L.join("\n");
+}
+function agentSystem(week){
+  const persona=apiPersona();
+  const themes=app.themes.map(t=>`${t.id} (${t.name})`).join(", ")||"none";
+  const projects=app.projects.map(p=>`${p.id} (${p.name})`).join(", ")||"none";
+  const others=app.weeks.filter(w=>w!==week).map(w=>w.week).slice(0,8).join(", ")||"none";
+  return agentPrompt()+`
+
+## Environment (added by the Weekly To-Do app)
+You are embedded in the user's Weekly To-Do app.${persona?" About the user: "+persona+".":""} Today is ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}. You are working on ${week.week} (${week.label||""}); other weeks readable with read_week: ${others}.
+The list below is live and refreshes every turn — treat it as the source of truth over anything said earlier. Item ids appear as [id:…]; use them exactly in tool calls.
+Tools update_item, add_item, remove_item, restore_item and add_subtask PROPOSE changes: each one is shown to the user as a card they must explicitly approve or skip, and the tool result tells you which happened. Never say a change was made unless the result says Applied. Agree the plan in conversation first, then propose the changes together in one batch; keep the accompanying text short.
+Field values — plan: Mon, Tue, Wed, Thu, Fri, Next wk, Done, Not doing, or "" to clear · prio: High, Medium, Low · due: YYYY-MM-DD · theme ids: ${themes} · project ids: ${projects}.
+
+## Current list
+${weekBrief(week)}`;
+}
+async function loadAgentChat(week){
+  agent.week=week; agent.messages=[]; agent.decisions={}; agent.descs={}; agent.pending=null;
+  try{ const fh=await week._dir.getFileHandle("todo-assistant.json"); const d=JSON.parse(await (await fh.getFile()).text()); agent.messages=d.messages||[]; agent.decisions=d.decisions||{}; agent.descs=d.descs||{}; }catch(e){}
+  // a reload mid-approval leaves tool calls unanswered — answer them as skipped so the conversation stays valid
+  const last=agent.messages[agent.messages.length-1];
+  if(last&&last.role==="assistant"&&Array.isArray(last.content)){
+    const uses=last.content.filter(c=>c.type==="tool_use");
+    if(uses.length){ agent.messages.push({role:"user",content:uses.map(u=>{ agent.decisions[u.id]=agent.decisions[u.id]||"skipped"; return {type:"tool_result",tool_use_id:u.id,content:"Skipped — the page was reloaded before the user responded."}; })}); await saveAgentChat(); }
+  }
+}
+async function saveAgentChat(){
+  const w=agent.week; if(!w||!w._dir) return;
+  try{ const fh=await w._dir.getFileHandle("todo-assistant.json",{create:true}); const wr=await fh.createWritable();
+    await wr.write(JSON.stringify({week:w.week, updated:new Date().toISOString(), messages:agent.messages, decisions:agent.decisions, descs:agent.descs})); await wr.close(); }
+  catch(e){ console.error("assistant save",e); }
+}
+function mdToHtml(s){
+  const inline=t=>t.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");
+  let out="",list=null; const close=()=>{ if(list){ out+=`</${list}>`; list=null; } };
+  for(const ln of htmlEncode(s||"").split("\n")){
+    let m;
+    if((m=ln.match(/^\s*[-*•]\s+(.*)/))){ if(list!=="ul"){close();out+="<ul>";list="ul";} out+=`<li>${inline(m[1])}</li>`; continue; }
+    if((m=ln.match(/^\s*\d+[.)]\s+(.*)/))){ if(list!=="ol"){close();out+="<ol>";list="ol";} out+=`<li>${inline(m[1])}</li>`; continue; }
+    close();
+    if((m=ln.match(/^#{1,6}\s+(.*)/))){ out+=`<h3>${inline(m[1])}</h3>`; continue; }
+    if(ln.trim()) out+=`<p>${inline(ln)}</p>`;
+  }
+  close(); return out;
+}
+function describeProposal(u, week){
+  const i=u.input||{}, it=i.id?findItem(week,i.id):null, title=it?htmlDecode(it.item):(i.id||"?");
+  const fmt=v=>(v===""||v==null)?"—":htmlDecode(String(v));
+  switch(u.name){
+    case "update_item":{ const ch=i.changes||{}; return {t:`Update “${title}”`, d:Object.entries(ch).map(([k,v])=>`${k}: ${it?fmt(it[k]):"?"} → ${fmt(v)}`).join(" · ")||"(no changes)"}; }
+    case "add_item": return {t:`Add “${i.item||""}”`, d:[i.prio,i.due?"due "+i.due:"",i.plan?"plan "+i.plan:"",i.project,i.theme].filter(Boolean).join(" · ")+(i.detail?" — "+i.detail:"")};
+    case "remove_item": return {t:`Remove “${title}”`, d:"Reason: "+(i.reason||"—")};
+    case "restore_item": return {t:`Restore “${title}”`, d:""};
+    case "add_subtask": return {t:`Add subtask to “${title}”`, d:i.text||""};
+  }
+  return {t:u.name, d:JSON.stringify(i)};
+}
+function applyProposal(u, week){
+  const i=u.input||{}; const need=id=>{ const it=findItem(week,id); if(!it) throw new Error("no item with id "+id); return it; };
+  const okTheme=t=>(t&&app.themeById[t])?t:null, okProj=p=>(p&&app.projById[p])?p:null;
+  switch(u.name){
+    case "update_item":{ const it=need(i.id), ch=i.changes||{};
+      if("plan" in ch){ if(!PLAN_OPTS.includes(ch.plan)) throw new Error("bad plan value"); it.plan=ch.plan; if(ch.plan==="Done") it.done=true; }
+      if("prio" in ch){ if(!PRIOS.includes(ch.prio)) throw new Error("bad priority"); it.prio=ch.prio; }
+      if("done" in ch){ it.done=!!ch.done; if(!it.done&&it.plan==="Done") it.plan=""; }
+      if("due" in ch) it.due=String(ch.due||"").slice(0,10);
+      if("notes" in ch) it.notes=String(ch.notes||"");
+      if("item" in ch) it.item=htmlEncode(String(ch.item||"").trim())||it.item;
+      if("detail" in ch) it.detail=htmlEncode(String(ch.detail||"").trim())||"—";
+      if("theme" in ch) it.theme=okTheme(ch.theme);
+      if("project" in ch) it.project=okProj(ch.project);
+      return "Applied."; }
+    case "add_item":{ if(!String(i.item||"").trim()) throw new Error("item title required");
+      const id="agent-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      week.items.push(normalizeItem({id, item:htmlEncode(i.item.trim()), detail:htmlEncode((i.detail||"").trim())||"—", due:(i.due||"").slice(0,10),
+        prio:PRIOS.includes(i.prio)?i.prio:"Medium", plan:PLAN_OPTS.includes(i.plan)?i.plan:"", cat:htmlEncode((i.cat||"Ad-hoc").trim()), ctx:htmlEncode(i.ctx||""),
+        theme:okTheme(i.theme), project:okProj(i.project), source:"Added by assistant", added:true}));
+      return "Applied. New item id: "+id; }
+    case "remove_item": need(i.id).dismissed={reason:String(i.reason||"Removed by assistant"), ts:Date.now()}; return "Applied.";
+    case "restore_item": need(i.id).dismissed=null; return "Applied.";
+    case "add_subtask":{ const it=need(i.id); (it.subtasks=it.subtasks||[]).push({id:"st-"+Date.now(), text:htmlEncode(String(i.text||"").trim()), done:false}); return "Applied."; }
+  }
+  throw new Error("unknown tool "+u.name);
+}
+function setAgentStatus(m){ $('dstatus').textContent=m; }
+function renderAgent(){
+  const box=$('dmsgs'); let html="";
+  if(!agent.messages.length) html+=`<div class="msg asst">${mdToHtml("Ready. I can see this week's full list. Ask me to plan your day, pressure-test priorities, or tell me what changed — any edits I propose will show up here as cards for you to approve.")}</div>`;
+  for(const m of agent.messages){
+    if(m.role==="user"){ if(typeof m.content==="string") html+=`<div class="msg user">${htmlEncode(m.content)}</div>`; continue; }
+    for(const c of (Array.isArray(m.content)?m.content:[{type:"text",text:String(m.content||"")}])){
+      if(c.type==="text"&&c.text.trim()) html+=`<div class="msg asst">${mdToHtml(c.text)}</div>`;
+      else if(c.type==="tool_use"&&AGENT_MUTATING.has(c.name)){
+        const d=agent.descs[c.id]||(agent.descs[c.id]=describeProposal(c, agent.week)), st=agent.decisions[c.id];
+        const cls=!st?"pending":st==="applied"?"applied":st==="skipped"?"skipped":"error";
+        html+=`<div class="prop ${cls}"><div class="pt">${htmlEncode(d.t)}</div>${d.d?`<div class="pd">${htmlEncode(d.d)}</div>`:""}`+
+          (st?`<div class="pd" style="margin-top:5px">${st==="applied"?"✓ Applied":st==="skipped"?"✗ Skipped":"⚠ "+htmlEncode(st)}</div>`
+             :`<div class="pb"><button class="staddbtn" data-act="apply" data-tid="${c.id}">Apply</button><button class="restore" data-act="skip" data-tid="${c.id}">Skip</button></div>`)+`</div>`;
+      }
+      else if(c.type==="tool_use"&&c.name==="read_week") html+=`<div class="pd" style="font-size:12px;color:var(--muted)">↪ read ${htmlEncode((c.input||{}).week||"")}</div>`;
+    }
+  }
+  const n=agent.pending?Object.keys(agent.pending.waiting).length:0;
+  if(n>1) html+=`<div class="dall"><button class="staddbtn" data-act="applyall">Apply all ${n}</button><button class="restore" data-act="skipall">Skip all</button></div>`;
+  box.innerHTML=html; box.scrollTop=box.scrollHeight;
+  $('dinput').disabled=agent.busy; $('dsend').disabled=agent.busy;
+}
+function awaitApprovals(uses){ return new Promise(resolve=>{ agent.pending={waiting:Object.fromEntries(uses.map(u=>[u.id,u])), results:{}, resolve}; renderAgent(); }); }
+function decide(tid, act){
+  const p=agent.pending; if(!p||!p.waiting[tid]) return; const u=p.waiting[tid]; delete p.waiting[tid];
+  let res;
+  if(act==="apply"){ try{ res=applyProposal(u, agent.week); agent.decisions[u.id]="applied"; scheduleSave(agent.week,true); route(); }
+                     catch(e){ res="Failed: "+(e.message||e); agent.decisions[u.id]="failed: "+(e.message||e); } }
+  else { res="Skipped by the user."; agent.decisions[u.id]="skipped"; }
+  p.results[u.id]={type:"tool_result",tool_use_id:u.id,content:res};
+  renderAgent();
+  if(!Object.keys(p.waiting).length){ agent.pending=null; p.resolve(p.results); }
+}
+async function agentSend(){
+  const inp=$('dinput'), text=inp.value.trim(); if(!text||agent.busy) return; inp.value="";
+  const week=agent.week; agent.busy=true; setAgentStatus("Thinking…");
+  agent.messages.push({role:"user",content:text}); renderAgent(); await saveAgentChat();
+  try{
+    for(let turn=0; turn<8; turn++){
+      const j=await anthropic({max_tokens:8000, system:agentSystem(week), tools:AGENT_TOOLS, tool_choice:{type:"auto"}, messages:agent.messages});
+      agent.messages.push({role:"assistant",content:j.content}); renderAgent(); await saveAgentChat();
+      const uses=(j.content||[]).filter(c=>c.type==="tool_use");
+      if(j.stop_reason!=="tool_use"||!uses.length) break;
+      const results={};
+      uses.filter(u=>u.name==="read_week").forEach(u=>{ const w=app.weeks.find(x=>x.week===(u.input||{}).week);
+        results[u.id]={type:"tool_result",tool_use_id:u.id,content:w?weekBrief(w):"No such week. Available: "+app.weeks.map(x=>x.week).join(", ")}; });
+      const gated=uses.filter(u=>AGENT_MUTATING.has(u.name));
+      if(gated.length){ setAgentStatus("Waiting for your approval…"); Object.assign(results, await awaitApprovals(gated)); setAgentStatus("Thinking…"); }
+      uses.filter(u=>!results[u.id]).forEach(u=>{ results[u.id]={type:"tool_result",tool_use_id:u.id,content:"Unknown tool",is_error:true}; });
+      agent.messages.push({role:"user",content:uses.map(u=>results[u.id])}); await saveAgentChat();
+    }
+    setAgentStatus("");
+  }catch(e){ console.error(e); setAgentStatus("✗ "+(e.message||e)); }
+  agent.busy=false; renderAgent(); $('dinput').focus();
+}
+async function openAgent(){
+  const w=agentWeek(); if(!w){ alert("No weeks yet — ingest a week first."); return; }
+  if(!apiKey()){ openSettings(); return; }
+  if(agent.week!==w && !agent.busy) await loadAgentChat(w);
+  $('drawer').classList.add('show'); document.body.classList.add('dopen');
+  $('dweek').textContent=agent.week.week; renderAgent(); $('dinput').focus();
+}
+function closeAgent(){ $('drawer').classList.remove('show'); document.body.classList.remove('dopen'); }
+
 /* ---------- boot ---------- */
 $('connBtn').onclick=connect;
 $('homeBtn').onclick=()=>{ location.hash=''; };
 $('projBtn').onclick=()=>{ location.hash='projects'; };
 $('pbar').addEventListener('click',e=>{ const b=e.target.closest('.pchipbtn'); if(!b) return;
   const pid=b.dataset.pid; location.hash = (pid==='__all__'?'':'project/'+encodeURIComponent(pid)); });
+$('agentBtn').onclick=()=>{ if($('drawer').classList.contains('show')) closeAgent(); else openAgent(); };
+$('dclose').onclick=closeAgent;
+$('dsend').onclick=agentSend;
+$('dinput').addEventListener('keydown',e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); agentSend(); } });
+$('dnew').onclick=async()=>{ if(agent.busy||!agent.week) return; if(!confirm("Start a new conversation for "+agent.week.week+"? The current one will be deleted.")) return; agent.messages=[]; agent.decisions={}; agent.descs={}; await saveAgentChat(); renderAgent(); };
+$('dmsgs').addEventListener('click',e=>{ const b=e.target.closest('button[data-act]'); if(!b) return; const a=b.dataset.act;
+  if(a==="apply"||a==="skip") decide(b.dataset.tid,a);
+  else if(a==="applyall"||a==="skipall"){ const p=agent.pending; if(!p) return; Object.keys(p.waiting).forEach(t=>decide(t,a==="applyall"?"apply":"skip")); } });
+window.addEventListener('hashchange',()=>{ if($('drawer').classList.contains('show')&&!agent.busy){ const w=agentWeek(); if(w&&w!==agent.week) openAgent(); } });
 /* ===== DEMO MODE — embedded fake data so the app renders filled-out without a folder or API key ===== */
 writeWeek=async function(){ flashSaved(); };
 saveProjects=async function(){ flashSaved(); };

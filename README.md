@@ -33,6 +33,7 @@ your week-prep folder/
 - **Themes & projects** — two independent tagging axes (e.g. theme `LEGAL`, project `ACME-ROLLOUT`), with keywords for auto-tagging, per-project views, and a "Copy brief for LLM" button that packages a project's open items for pasting into a chat.
 - **Feedback loop** — removing an item asks why ("not relevant", "already handled"…), and those reasons are fed back to the model so it stops surfacing that kind of item.
 - **Plan, prioritize, search** — priority pills, plan-day column, due-date highlighting, full-text search, done-hiding, sortable columns.
+- **✦ Assistant** — a chat drawer that sees the whole week and acts as an executive-assistant / productivity coach (default prompt included, editable in ⚙ AI). It can propose any change — plan days, priorities, done, new items, subtasks, removals — but **every change appears as a card you must explicitly Apply or Skip**; nothing touches your list without a click. Conversations persist per week in `todo-assistant.json`.
 
 ## Setup
 

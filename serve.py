@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 KEY = None
-WRITABLE = re.compile(r"^(projects\.json|WO-[^/]+/todo-state\.json)$")
+WRITABLE = re.compile(r"^(projects\.json|WO-[^/]+/todo-(state|assistant)\.json)$")
 STATIC_HTML = re.compile(r"^/[A-Za-z0-9 _.\-]+\.html$")
 PLAN_OPTS = "Mon / Tue / Wed / Thu / Fri / Next wk / Done / Not doing"
 
