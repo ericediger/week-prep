@@ -1214,7 +1214,17 @@ For each item set: a short "detail" (one sentence), a "due" date if stated or cl
 ${themeList}
 and a "project" = the matching specific workstream/initiative id from this list, or null:
 ${projList}
-Theme and project are independent — a task can have one, both, or neither. Return results ONLY through the save_week tool. Do NOT include carry-over items from earlier weeks — those are added automatically.`;
+Theme and project are independent — a task can have one, both, or neither. Always respond by calling the save_week tool exactly once with every item (call it with an empty items array if there are none) — never reply in plain text. Do NOT include carry-over items from earlier weeks — those are added automatically.`;
+}
+// Fable 5.1+ rejects forced tool_choice, so we request the tool with "auto" and accept a JSON text reply as a fallback
+function itemsFromResponse(j){
+  const c=j.content||[];
+  const tu=c.find(x=>x.type==="tool_use"&&x.name==="save_week")||c.find(x=>x.type==="tool_use");
+  if(tu&&tu.input&&Array.isArray(tu.input.items)) return tu.input.items;
+  const txt=c.filter(x=>x.type==="text").map(x=>x.text).join("\n");
+  const m=txt.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if(m){ try{ const p=JSON.parse(m[0]); if(Array.isArray(p)) return p; if(p&&Array.isArray(p.items)) return p.items; }catch(e){} }
+  throw new Error("Model did not return items. "+(txt||JSON.stringify(j)).slice(0,200));
 }
 const SAVE_WEEK_TOOL={name:"save_week",description:"Save the extracted action items for the week.",input_schema:{type:"object",properties:{items:{type:"array",items:{type:"object",properties:{
   item:{type:"string",description:"Imperative task title"}, detail:{type:"string"}, due:{type:"string",description:"YYYY-MM-DD or empty"},
@@ -1248,11 +1258,9 @@ async function ingestWeek(entry){
     const sys=buildIngestSys(lbl);
     s("Asking Claude ("+apiModel()+")… ~30–60s");
     const tool=SAVE_WEEK_TOOL;
-    const j=await anthropic({max_tokens:16000, system:sys, tools:[tool], tool_choice:{type:"tool",name:"save_week"},
+    const j=await anthropic({max_tokens:16000, system:sys, tools:[tool], tool_choice:{type:"auto",disable_parallel_tool_use:true},
       messages:[{role:"user", content:[{type:"text",text:`Week ${entry.name} (${lbl}). Source material:`}, ...blocks]}]});
-    const tu=(j.content||[]).find(c=>c.type==="tool_use");
-    if(!tu||!tu.input||!Array.isArray(tu.input.items)) throw new Error("Model did not return items. "+JSON.stringify(j).slice(0,200));
-    let items=toolItemsToNormalized(tu.input.items, "AI-extracted ("+apiModel()+")");
+    let items=toolItemsToNormalized(itemsFromResponse(j), "AI-extracted ("+apiModel()+")");
     const newCount=items.length;
     if(prior){
       prior.items.filter(i=>!i.dismissed && !i.done && i.plan!=="Not doing").forEach(i=>{
@@ -1315,12 +1323,10 @@ Items the user REMOVED as not relevant — do NOT re-surface these or close vari
 ${dis}`:"")+`
 Return ONLY genuinely new action items from the new source material. If there are none, return an empty items array.`;
     s(`Asking Claude about ${newNames.length} new file${newNames.length>1?"s":""}…`);
-    const j=await anthropic({max_tokens:16000, system:sys, tools:[SAVE_WEEK_TOOL], tool_choice:{type:"tool",name:"save_week"},
+    const j=await anthropic({max_tokens:16000, system:sys, tools:[SAVE_WEEK_TOOL], tool_choice:{type:"auto",disable_parallel_tool_use:true},
       messages:[{role:"user", content:[{type:"text",text:`Week ${week.week} (${week.label||""}). New source material:`}, ...blocks]}]});
-    const tu=(j.content||[]).find(c=>c.type==="tool_use");
-    if(!tu||!tu.input||!Array.isArray(tu.input.items)) throw new Error("Model did not return items. "+JSON.stringify(j).slice(0,200));
     const stamp=new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"});
-    const items=toolItemsToNormalized(tu.input.items, "AI re-scan "+stamp+" ("+apiModel()+")");
+    const items=toolItemsToNormalized(itemsFromResponse(j), "AI re-scan "+stamp+" ("+apiModel()+")");
     week.items.push(...items);
     week.sources=allNames;
     scheduleSave(week,true);
