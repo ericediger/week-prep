@@ -323,7 +323,31 @@ async function verify(handle){
   if((await handle.requestPermission(o))==="granted") return true;
   return false;
 }
+/* ---------- HTTP mode: when served by serve.py, mimic the File System Access handles over fetch ---------- */
+const apiPath=p=>"/api/"+p.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+const joinPath=(a,b)=>a?a+"/"+b:b;
+function httpFileHandle(path,name){
+  return { kind:"file", name,
+    async getFile(){ const r=await fetch(apiPath("file/"+path)); if(!r.ok) throw new Error("HTTP "+r.status+" reading "+name); const b=await r.blob(); return new File([b],name,{type:b.type,lastModified:Date.now()}); },
+    async createWritable(){ let buf=""; return { async write(t){ buf+=String(t); }, async close(){ const r=await fetch(apiPath("file/"+path),{method:"PUT",headers:{"content-type":"application/json"},body:buf}); if(!r.ok) throw new Error("HTTP "+r.status+" saving "+name); } }; },
+    async queryPermission(){ return "granted"; }, async requestPermission(){ return "granted"; } };
+}
+function httpDirHandle(path,name){
+  return { kind:"directory", name,
+    async *entries(){ const r=await fetch(apiPath("ls/"+path)); if(!r.ok) throw new Error("HTTP "+r.status+" listing "+(name||"root")); for(const e of await r.json()){ const p=joinPath(path,e.name); yield [e.name, e.kind==="directory"?httpDirHandle(p,e.name):httpFileHandle(p,e.name)]; } },
+    async getFileHandle(n,opts){ const p=joinPath(path,n); if(!(opts&&opts.create)){ const r=await fetch(apiPath("file/"+p),{method:"HEAD"}); if(!r.ok){ const e=new Error("Not found: "+p); e.name="NotFoundError"; throw e; } } return httpFileHandle(p,n); },
+    async queryPermission(){ return "granted"; }, async requestPermission(){ return "granted"; } };
+}
+async function httpBackend(){
+  if(app._http!==undefined) return app._http;
+  app._http=false;
+  if(!/^https?:$/.test(location.protocol)) return false;
+  try{ const r=await fetch("/api/ls/",{cache:"no-store"}); if(r.ok && (r.headers.get("content-type")||"").includes("json")){ app.root=httpDirHandle("",location.host); app._http=true; } }catch(e){}
+  return app._http;
+}
+
 async function connect(){
+  if(app._http){ location.reload(); return; }
   if(!window.showDirectoryPicker){ alert("This needs Chrome or Edge. Please open Home.html there."); return; }
   try{
     const handle=await window.showDirectoryPicker({mode:"readwrite",id:"weekprep"});
@@ -333,6 +357,7 @@ async function connect(){
   }catch(e){ if(e&&e.name==="AbortError") return; console.error(e); setStatus("off","Could not connect: "+(e.message||e)); }
 }
 async function tryRestore(){
+  if(await httpBackend()){ await loadAll(); return true; }
   try{
     const handle=await idbGet("rootHandle");
     if(!handle) return false;
@@ -1335,7 +1360,6 @@ $('homeBtn').onclick=()=>{ location.hash=''; };
 $('projBtn').onclick=()=>{ location.hash='projects'; };
 $('pbar').addEventListener('click',e=>{ const b=e.target.closest('.pchipbtn'); if(!b) return;
   const pid=b.dataset.pid; location.hash = (pid==='__all__'?'':'project/'+encodeURIComponent(pid)); });
-
 /* ===== DEMO MODE — embedded fake data so the app renders filled-out without a folder or API key ===== */
 writeWeek=async function(){ flashSaved(); };
 saveProjects=async function(){ flashSaved(); };

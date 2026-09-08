@@ -43,6 +43,24 @@ your week-prep folder/
 
 A tiny sample week is included in `sample-week/` — copy `WO-260803` into your folder to try the flow.
 
+## Use it from other devices — or let an AI agent read it
+
+`Home.html` alone needs the folder picker, which only works on the machine that has the folder. `serve.py` (Python 3, no dependencies) lifts that limit: run it from your week-prep folder and the app is reachable from any phone, tablet, or laptop on your network — and readable by browser-based AI agents.
+
+```bash
+python3 serve.py          # or double-click "Start Server.command" on macOS
+```
+
+It prints URLs like these (the key is generated on first run and stored in `.serve-key`; delete that file to rotate it, or pass `--no-key` to disable it):
+
+| URL | What it is |
+|---|---|
+| `http://<your-ip>:8877/?key=…` | The app — full read/write, no folder picker. Open once with the key; a cookie remembers it. |
+| `http://<your-ip>:8877/brief?key=…` | **The current week as a clean, agent-friendly page**: open items sorted by priority and due date with plan day, project, carry-over age, subtasks, notes and context; plus done / not-doing / removed lists and project descriptions. Add `?week=WO-YYMMDD` for another week, or use `/brief.txt` for markdown. |
+| `http://<your-ip>:8877/api/file/WO-260803/todo-state.json` | Raw JSON for a week (`PUT` to save). `/api/ls/` lists the folder. |
+
+Point a personal-assistant agent at the `/brief` URL to have it review and prioritize your week; give it the app URL if you want it to set plan days or reorder priorities itself. The server only writes `todo-state.json` and `projects.json` (atomically, after validating the JSON), refuses paths outside the folder, and never serves dotfiles. It binds to all interfaces by default — use `--bind 127.0.0.1` for this machine only, or `--port` to change the port.
+
 ## Privacy notes
 
 - Your files are read locally. Their contents are sent to the Anthropic API **only** when you click Ingest or Re-scan.
