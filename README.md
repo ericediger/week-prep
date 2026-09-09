@@ -34,7 +34,7 @@ your week-prep folder/
 - **Feedback loop** — removing an item asks why ("not relevant", "already handled"…), and those reasons are fed back to the model so it stops surfacing that kind of item.
 - **Dark mode** — ☾ toggle in the top bar; remembers your choice (defaults to your OS setting).
 - **Plan, prioritize, search** — priority pills, plan-day column, due-date highlighting, full-text search, done-hiding, sortable columns.
-- **✦ Assistant** — a chat drawer that sees the whole week and acts as an executive-assistant / productivity coach (default prompt included, editable in ⚙ AI). It can propose any change — plan days, priorities, done, new items, subtasks, removals — but **every change appears as a card you must explicitly Apply or Skip**; nothing touches your list without a click. Conversations persist per week in `todo-assistant.json`.
+- **✦ Assistant** — a chat drawer that sees the whole week and acts as an executive-assistant / productivity coach (default prompt included, editable in ⚙ AI). It can propose any change — plan days, priorities, done, new items, subtasks, removals, and creating / editing / retiring themes and projects — but **every change appears as a card you must explicitly Apply or Skip**; nothing touches your list without a click. Conversations persist per week in `todo-assistant.json`.
 
 ## Setup
 

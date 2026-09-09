@@ -1462,7 +1462,8 @@ Keep the response compact and proportional to the complexity of the day.
 * Start Here: The single action I should take next.
 For progress updates or small questions, respond directly rather than repeating the entire plan.`;
 function agentPrompt(){ return (localStorage.getItem('weektodo_agent_prompt')||"").trim()||DEFAULT_AGENT_PROMPT; }
-const AGENT_MUTATING=new Set(["update_item","add_item","remove_item","restore_item","add_subtask"]);
+const AGENT_ITEM_TOOLS=new Set(["update_item","add_item","remove_item","restore_item","add_subtask"]);
+const AGENT_MUTATING=new Set([...AGENT_ITEM_TOOLS,"create_theme","update_theme","delete_theme","create_project","update_project","delete_project"]);
 const AGENT_TOOLS=[
   {name:"update_item",description:"Propose changes to an existing item (plan day, priority, done, due date, notes, title, detail, theme, project). The user must approve the card before it is applied.",
    input_schema:{type:"object",properties:{id:{type:"string"},changes:{type:"object",properties:{
@@ -1476,6 +1477,18 @@ const AGENT_TOOLS=[
    input_schema:{type:"object",properties:{id:{type:"string"},reason:{type:"string"}},required:["id","reason"]}},
   {name:"restore_item",description:"Propose restoring a previously removed item. The user must approve.",input_schema:{type:"object",properties:{id:{type:"string"}},required:["id"]}},
   {name:"add_subtask",description:"Propose a checklist subtask under an item. The user must approve.",input_schema:{type:"object",properties:{id:{type:"string"},text:{type:"string"}},required:["id","text"]}},
+  {name:"create_theme",description:"Propose a new theme (a high-level area/department, e.g. ADMIN, LEGAL). The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string",description:"short uppercase code"},name:{type:"string"},blurb:{type:"string",description:"one-line purpose"},color:{type:"string",description:"#rrggbb"},keywords:{type:"array",items:{type:"string"},description:"lowercase words used to auto-tag future weeks"}},required:["id","name"]}},
+  {name:"update_theme",description:"Propose edits to a theme's name, blurb, color or keywords. The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string"},changes:{type:"object",properties:{name:{type:"string"},blurb:{type:"string"},color:{type:"string"},keywords:{type:"array",items:{type:"string"}}},additionalProperties:false}},required:["id","changes"]}},
+  {name:"delete_theme",description:"Propose retiring a theme. Its items in EVERY week move to reassign_to (or lose their theme if null). The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string"},reassign_to:{type:["string","null"]}},required:["id"]}},
+  {name:"create_project",description:"Propose a new project (a specific workstream/initiative). The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string",description:"short uppercase code"},name:{type:"string"},prefix:{type:"string",description:"for the reference ID; defaults to id"},blurb:{type:"string",description:"standing context, one paragraph"},color:{type:"string"},keywords:{type:"array",items:{type:"string"}},llm_tool:{type:"string"},llm_name:{type:"string"},llm_link:{type:"string"}},required:["id","name"]}},
+  {name:"update_project",description:"Propose edits to a project's name, blurb, color, keywords, or where it lives (llm_tool / llm_name / llm_link). The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string"},changes:{type:"object",properties:{name:{type:"string"},blurb:{type:"string"},color:{type:"string"},keywords:{type:"array",items:{type:"string"}},llm_tool:{type:"string"},llm_name:{type:"string"},llm_link:{type:"string"}},additionalProperties:false}},required:["id","changes"]}},
+  {name:"delete_project",description:"Propose retiring a project. Its items in EVERY week move to reassign_to (or lose their project if null). The user must approve.",
+   input_schema:{type:"object",properties:{id:{type:"string"},reassign_to:{type:["string","null"]}},required:["id"]}},
   {name:"read_week",description:"Read another week's full list (e.g. last week). No approval needed.",input_schema:{type:"object",properties:{week:{type:"string",description:"WO-YYMMDD"}},required:["week"]}}
 ];
 const agent={week:null, messages:[], decisions:{}, descs:{}, busy:false, pending:null};   // descs: card text captured before a change is applied
@@ -1503,16 +1516,20 @@ function weekBrief(week){
 }
 function agentSystem(week){
   const persona=apiPersona();
-  const themes=app.themes.map(t=>`${t.id} (${t.name})`).join(", ")||"none";
-  const projects=app.projects.map(p=>`${p.id} (${p.name})`).join(", ")||"none";
+  const themes=app.themes.map(t=>`  ${t.id} — ${t.name}${t.blurb?": "+t.blurb:""} · ${themeOpenCount(t.id)} open`).join("\n")||"  (none yet)";
+  const projects=app.projects.map(p=>`  ${p.id} — ${p.name}${p.blurb?": "+p.blurb:""} · ${projOpenCount(p.id)} open`).join("\n")||"  (none yet)";
   const others=app.weeks.filter(w=>w!==week).map(w=>w.week).slice(0,8).join(", ")||"none";
   return agentPrompt()+`
 
 ## Environment (added by the Weekly To-Do app)
 You are embedded in the user's Weekly To-Do app.${persona?" About the user: "+persona+".":""} Today is ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}. You are working on ${week.week} (${week.label||""}); other weeks readable with read_week: ${others}.
 The list below is live and refreshes every turn — treat it as the source of truth over anything said earlier. Item ids appear as [id:…]; use them exactly in tool calls.
-Tools update_item, add_item, remove_item, restore_item and add_subtask PROPOSE changes: each one is shown to the user as a card they must explicitly approve or skip, and the tool result tells you which happened. Never say a change was made unless the result says Applied. Agree the plan in conversation first, then propose the changes together in one batch; keep the accompanying text short.
-Field values — plan: Mon, Tue, Wed, Thu, Fri, Next wk, Done, Not doing, or "" to clear · prio: High, Medium, Low · due: YYYY-MM-DD · theme ids: ${themes} · project ids: ${projects}.
+Tools that PROPOSE changes — items: update_item, add_item, remove_item, restore_item, add_subtask · themes: create_theme, update_theme, delete_theme · projects: create_project, update_project, delete_project. Each proposal is shown to the user as a card they must explicitly approve or skip, and the tool result tells you which happened. Never say a change was made unless the result says Applied. Retiring a theme or project moves its items in every week to reassign_to (or clears them). Agree the plan in conversation first, then propose the changes together in one batch; keep the accompanying text short. A newly created theme/project can be referenced by later proposals in the same batch only after its card is applied — so create first, then propose item moves in the next turn.
+Field values — plan: Mon, Tue, Wed, Thu, Fri, Next wk, Done, Not doing, or "" to clear · prio: High, Medium, Low · due: YYYY-MM-DD.
+Themes (id — name: purpose · open items across all weeks):
+${themes}
+Projects (id — name: purpose · open items across all weeks):
+${projects}
 
 ## Current list
 ${weekBrief(week)}`;
@@ -1555,11 +1572,22 @@ function describeProposal(u, week){
     case "remove_item": return {t:`Remove “${title}”`, d:"Reason: "+(i.reason||"—")};
     case "restore_item": return {t:`Restore “${title}”`, d:""};
     case "add_subtask": return {t:`Add subtask to “${title}”`, d:i.text||""};
+    case "create_theme": return {t:`Create theme ${String(i.id||"").toUpperCase()}`, d:[i.name,i.blurb].filter(Boolean).join(" — ")+(i.keywords&&i.keywords.length?" · keywords: "+i.keywords.join(", "):"")};
+    case "update_theme":{ const t=theme(i.id); return {t:`Update theme ${i.id||""}`, d:Object.entries(i.changes||{}).map(([k,v])=>`${k}: ${t?fmt(Array.isArray(t[k])?t[k].join(", "):t[k]):"?"} → ${fmt(Array.isArray(v)?v.join(", "):v)}`).join(" · ")||"(no changes)"}; }
+    case "delete_theme":{ const n=app.weeks.reduce((a,w)=>a+w.items.filter(x=>x.theme===i.id).length,0); return {t:`Retire theme ${i.id||""}`, d:`${n} item${n===1?"":"s"} across all weeks → ${i.reassign_to||"no theme"}`}; }
+    case "create_project": return {t:`Create project ${String(i.id||"").toUpperCase()}`, d:[i.name,i.blurb].filter(Boolean).join(" — ")+(i.keywords&&i.keywords.length?" · keywords: "+i.keywords.join(", "):"")+((i.llm_tool||i.llm_name)?" · lives in "+[i.llm_tool,i.llm_name].filter(Boolean).join(" / "):"")};
+    case "update_project":{ const p=proj(i.id); const cur=k=>!p?"?":k.startsWith("llm_")?fmt((p.llm||{})[k.slice(4)]):fmt(Array.isArray(p[k])?p[k].join(", "):p[k]);
+      return {t:`Update project ${i.id||""}`, d:Object.entries(i.changes||{}).map(([k,v])=>`${k}: ${cur(k)} → ${fmt(Array.isArray(v)?v.join(", "):v)}`).join(" · ")||"(no changes)"}; }
+    case "delete_project":{ const n=app.weeks.reduce((a,w)=>a+w.items.filter(x=>x.project===i.id).length,0); return {t:`Retire project ${i.id||""}`, d:`${n} item${n===1?"":"s"} across all weeks → ${i.reassign_to||"no project"}`}; }
   }
   return {t:u.name, d:JSON.stringify(i)};
 }
-function applyProposal(u, week){
+async function applyProposal(u, week){
   const i=u.input||{}; const need=id=>{ const it=findItem(week,id); if(!it) throw new Error("no item with id "+id); return it; };
+  const normId=x=>String(x||"").trim().toUpperCase().replace(/\s+/g,"-"), okColor=(c,d)=>/^#[0-9a-f]{6}$/i.test(String(c||""))?c:d;
+  const kw=a=>Array.isArray(a)?a.map(x=>String(x).trim().toLowerCase()).filter(Boolean):typeof a==="string"?a.split(",").map(x=>x.trim().toLowerCase()).filter(Boolean):[];
+  // moves every item in every week off a retired theme/project; returns how many
+  const reassign=(field,from,to)=>{ let n=0; app.weeks.forEach(w=>{ let d=false; w.items.forEach(x=>{ if(x[field]===from){ x[field]=to; d=true; n++; } }); if(d) scheduleSave(w,true); }); return n; };
   const okTheme=t=>(t&&app.themeById[t])?t:null, okProj=p=>(p&&app.projById[p])?p:null;
   switch(u.name){
     case "update_item":{ const it=need(i.id), ch=i.changes||{};
@@ -1582,6 +1610,25 @@ function applyProposal(u, week){
     case "remove_item": need(i.id).dismissed={reason:String(i.reason||"Removed by assistant"), ts:Date.now()}; return "Applied.";
     case "restore_item": need(i.id).dismissed=null; return "Applied.";
     case "add_subtask":{ const it=need(i.id); (it.subtasks=it.subtasks||[]).push({id:"st-"+Date.now(), text:htmlEncode(String(i.text||"").trim()), done:false}); return "Applied."; }
+    case "create_theme":{ const id=normId(i.id); if(!id) throw new Error("theme id required"); if(theme(id)) throw new Error("theme "+id+" already exists");
+      const nt={id, name:String(i.name||id).trim()||id, color:okColor(i.color,"#6b7280"), blurb:String(i.blurb||"").trim(), keywords:kw(i.keywords)};
+      app.themes.push(nt); app.themeById[id]=nt; await saveProjects(); return "Applied. Theme "+id+" created."; }
+    case "update_theme":{ const t=theme(i.id); if(!t) throw new Error("no theme "+i.id); const ch=i.changes||{};
+      if("name" in ch) t.name=String(ch.name||"").trim()||t.name; if("blurb" in ch) t.blurb=String(ch.blurb||"").trim(); if("color" in ch) t.color=okColor(ch.color,t.color); if("keywords" in ch) t.keywords=kw(ch.keywords);
+      await saveProjects(); return "Applied."; }
+    case "delete_theme":{ const t=theme(i.id); if(!t) throw new Error("no theme "+i.id); if(i.reassign_to&&!theme(i.reassign_to)) throw new Error("reassign_to theme "+i.reassign_to+" does not exist");
+      const to=i.reassign_to||null, n=reassign("theme",t.id,to); app.themes=app.themes.filter(x=>x.id!==t.id); delete app.themeById[t.id]; await saveProjects();
+      return `Applied. Theme ${t.id} retired; ${n} item(s) ${to?"moved to "+to:"cleared"}.`; }
+    case "create_project":{ const id=normId(i.id); if(!id) throw new Error("project id required"); if(proj(id)) throw new Error("project "+id+" already exists"); const prefix=normId(i.prefix)||id;
+      const np={id, name:String(i.name||id).trim()||id, prefix, uid:makeUid(prefix), blurb:String(i.blurb||"").trim(), color:okColor(i.color,"#2f6f4f"), llm:{tool:String(i.llm_tool||""),name:String(i.llm_name||""),link:String(i.llm_link||"")}, keywords:kw(i.keywords)};
+      app.projects.push(np); app.projById[id]=np; await saveProjects(); return "Applied. Project "+id+" created ("+np.uid+")."; }
+    case "update_project":{ const p=proj(i.id); if(!p) throw new Error("no project "+i.id); const ch=i.changes||{}; p.llm=p.llm||{tool:"",name:"",link:""};
+      if("name" in ch) p.name=String(ch.name||"").trim()||p.name; if("blurb" in ch) p.blurb=String(ch.blurb||"").trim(); if("color" in ch) p.color=okColor(ch.color,p.color); if("keywords" in ch) p.keywords=kw(ch.keywords);
+      if("llm_tool" in ch) p.llm.tool=String(ch.llm_tool||""); if("llm_name" in ch) p.llm.name=String(ch.llm_name||""); if("llm_link" in ch) p.llm.link=String(ch.llm_link||"");
+      await saveProjects(); return "Applied."; }
+    case "delete_project":{ const p=proj(i.id); if(!p) throw new Error("no project "+i.id); if(i.reassign_to&&!proj(i.reassign_to)) throw new Error("reassign_to project "+i.reassign_to+" does not exist");
+      const to=i.reassign_to||null, n=reassign("project",p.id,to); app.projects=app.projects.filter(x=>x.id!==p.id); delete app.projById[p.id]; await saveProjects();
+      return `Applied. Project ${p.id} retired; ${n} item(s) ${to?"moved to "+to:"cleared"}.`; }
   }
   throw new Error("unknown tool "+u.name);
 }
@@ -1608,14 +1655,15 @@ function renderAgent(){
   box.innerHTML=html; box.scrollTop=box.scrollHeight;
   $('dinput').disabled=agent.busy; $('dsend').disabled=agent.busy;
 }
-function awaitApprovals(uses){ return new Promise(resolve=>{ agent.pending={waiting:Object.fromEntries(uses.map(u=>[u.id,u])), results:{}, resolve}; renderAgent(); }); }
-function decide(tid, act){
-  const p=agent.pending; if(!p||!p.waiting[tid]) return; const u=p.waiting[tid]; delete p.waiting[tid];
+function awaitApprovals(uses){ return new Promise(resolve=>{ agent.pending={waiting:Object.fromEntries(uses.map(u=>[u.id,u])), inflight:{}, results:{}, resolve}; renderAgent(); }); }
+async function decide(tid, act){
+  const p=agent.pending; if(!p||!p.waiting[tid]||p.inflight[tid]) return; const u=p.waiting[tid]; p.inflight[tid]=true;
   let res;
-  if(act==="apply"){ try{ res=applyProposal(u, agent.week); agent.decisions[u.id]="applied"; scheduleSave(agent.week,true); route(); }
+  if(act==="apply"){ try{ res=await applyProposal(u, agent.week); agent.decisions[u.id]="applied"; if(AGENT_ITEM_TOOLS.has(u.name)) scheduleSave(agent.week,true); route(); }
                      catch(e){ res="Failed: "+(e.message||e); agent.decisions[u.id]="failed: "+(e.message||e); } }
   else { res="Skipped by the user."; agent.decisions[u.id]="skipped"; }
   p.results[u.id]={type:"tool_result",tool_use_id:u.id,content:res};
+  delete p.waiting[tid]; delete p.inflight[tid];
   renderAgent();
   if(!Object.keys(p.waiting).length){ agent.pending=null; p.resolve(p.results); }
 }
@@ -1666,7 +1714,7 @@ $('dinput').addEventListener('keydown',e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.
 $('dnew').onclick=async()=>{ if(agent.busy||!agent.week) return; if(!confirm("Start a new conversation for "+agent.week.week+"? The current one will be deleted.")) return; agent.messages=[]; agent.decisions={}; agent.descs={}; await saveAgentChat(); renderAgent(); };
 $('dmsgs').addEventListener('click',e=>{ const b=e.target.closest('button[data-act]'); if(!b) return; const a=b.dataset.act;
   if(a==="apply"||a==="skip") decide(b.dataset.tid,a);
-  else if(a==="applyall"||a==="skipall"){ const p=agent.pending; if(!p) return; Object.keys(p.waiting).forEach(t=>decide(t,a==="applyall"?"apply":"skip")); } });
+  else if(a==="applyall"||a==="skipall"){ const p=agent.pending; if(!p) return; (async()=>{ for(const t of Object.keys(p.waiting)) await decide(t,a==="applyall"?"apply":"skip"); })(); } });
 window.addEventListener('hashchange',()=>{ if($('drawer').classList.contains('show')&&!agent.busy){ const w=agentWeek(); if(w&&w!==agent.week) openAgent(); } });
 /* ===== DEMO MODE — embedded fake data so the app renders filled-out without a folder or API key ===== */
 writeWeek=async function(){ flashSaved(); };
