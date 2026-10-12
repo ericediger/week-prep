@@ -481,10 +481,10 @@ async function loadAll(){
       data.items=(data.items||[]).map(normalizeItem);
       weeks.push(data);
     } else {
-      // no state file yet — pending ingest if it holds any source files
+      // no state file yet — pending: ingest it if it holds source files, or start it empty
       let has=false;
-      try{ for await (const [n,h] of handle.entries()){ if(h.kind==="file" && !n.startsWith(".")){ has=true; break; } } }catch(e){}
-      if(has) pending.push({name, dir:handle});
+      try{ for await (const [n,h] of handle.entries()){ if(isSourceFile(n,h)){ has=true; break; } } }catch(e){}
+      pending.push({name, dir:handle, hasFiles:has});
     }
   }
   weeks.sort((a,b)=> (a.week<b.week?1:a.week>b.week?-1:0));
@@ -665,28 +665,70 @@ function renderGate(){
 }
 
 /* ---------- home ---------- */
+// "" if the folder name looks right, else why it probably isn't (typo'd dates sort weeks into the wrong place)
+function weekWarning(name){
+  const m=/^WO-(\d{2})(\d{2})(\d{2})$/i.exec(name||""); if(!m) return "doesn't match WO-YYMMDD";
+  const d=new Date(2000+ +m[1],+m[2]-1,+m[3]); if(isNaN(d)||d.getDate()!==+m[3]) return "isn't a real date";
+  if(d.getDay()!==1) return "is a "+d.toLocaleDateString("en-US",{weekday:"long"})+", not a Monday";
+  const days=Math.round((d-new Date().setHours(0,0,0,0))/86400000);
+  if(Math.abs(days)>45) return `is ${d.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})} — ${Math.round(Math.abs(days)/7)} weeks ${days<0?"ago":"from now"}`;
+  return "";
+}
 function pendingBanner(){
   if(!app.pending.length) return "";
-  const noKey=!apiKey();
+  const anyFiles=app.pending.some(p=>p.hasFiles), noKey=!apiKey();
+  const warn=app.pending.map(p=>({p,w:weekWarning(p.name)})).filter(x=>x.w).map(x=>`<div class="inghint" style="color:var(--hi);margin-top:6px">⚠ ${esc(x.p.name)} ${x.w} — check the folder name (WO-YYMMDD, that week's Monday) before using it.</div>`).join("");
+  const rows=app.pending.map(p=>p.hasFiles
+    ?`<button class="openbtn ingbtn" data-name="${esc(p.name)}">Ingest ${esc(p.name)} →</button>`
+    :`<button class="openbtn ingbtn startbtn" data-name="${esc(p.name)}">Start ${esc(p.name)} empty →</button>`).join("");
   return `<div class="ingest">
-    <div class="ingtxt">✨ <strong>${app.pending.length} new week folder${app.pending.length>1?'s':''} ready to ingest:</strong> ${app.pending.map(p=>esc(p.name)).join(", ")}<div class="inghint">Reads the emails, notes &amp; screenshots, carries over your open items, tags projects — then writes the week.</div></div>
-    <div class="ingrow">${app.pending.map(p=>`<button class="openbtn ingbtn" data-name="${esc(p.name)}">Ingest ${esc(p.name)} →</button>`).join("")}
-      <span id="ingestStatus" class="ingstatus">${noKey?'⚠ Add your API key in ⚙ AI first':''}</span></div>
+    <div class="ingtxt">✨ <strong>${app.pending.length} new week folder${app.pending.length>1?'s':''}:</strong> ${app.pending.map(p=>esc(p.name)).join(", ")}<div class="inghint">${anyFiles?"Ingest reads the emails, notes &amp; screenshots, carries over your open items and tags projects. ":""}Starting a folder empty just carries over last week's open items so you can add tasks by hand or with the assistant — drop files in later and use Re-scan.</div>${warn}</div>
+    <div class="ingrow">${rows}<span id="ingestStatus" class="ingstatus">${noKey&&anyFiles?'⚠ Add your API key in ⚙ AI first':''}</span></div>
   </div>`;
 }
 function bindIngest(){
-  document.querySelectorAll('.ingbtn').forEach(b=>b.onclick=()=>{ const e=app.pending.find(p=>p.name===b.dataset.name); if(e) ingestWeek(e); });
+  document.querySelectorAll('.ingbtn').forEach(b=>b.onclick=()=>{ const e=app.pending.find(p=>p.name===b.dataset.name); if(!e) return; if(b.classList.contains('startbtn')) startWeek(e); else ingestWeek(e); });
+  const nb=$('newWeekBtn'); if(nb) nb.onclick=newWeek;
+}
+function canMakeFolders(){ return !!(app.root && !app._http && app.root.getDirectoryHandle); }
+async function newWeek(){
+  if(!canMakeFolders()) return;
+  const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7));   // this week's Monday
+  const known=new Set([...app.weeks.map(w=>w.week), ...app.pending.map(p=>p.name)]);
+  let name="WO-"+ymd(d); while(known.has(name)){ d.setDate(d.getDate()+7); name="WO-"+ymd(d); }
+  if(!confirm(`Create ${name} — ${weekLabel(name)} — and start it with last week's open items?`)) return;
+  try{ const dir=await app.root.getDirectoryHandle(name,{create:true}); await startWeek({name, dir, hasFiles:false}); }
+  catch(e){ console.error(e); alert("Could not create the folder: "+(e.message||e)); }
+}
+// open items from the previous week, re-stamped for the new one
+function carriedItems(prior){
+  return prior.items.filter(i=>!i.dismissed && !i.done && i.plan!=="Not doing").map(i=>Object.assign({}, i, {carriedFrom:prior.week, carryAge:(i.carryAge||0)+1, plan:"", dismissed:null,
+    subtasks:(i.subtasks||[]).map(st=>Object.assign({},st))}));
+}
+// create a week without reading any files or calling the model: carry-over only
+async function startWeek(entry){
+  const s=m=>{ const el=$('ingestStatus'); if(el) el.textContent=m; };
+  document.querySelectorAll('.ingbtn').forEach(b=>b.disabled=true);
+  try{
+    const lbl=weekLabel(entry.name), prior=app.weeks[0];
+    const items=prior?carriedItems(prior):[];
+    const state={ week:entry.name, label:lbl, dates:"Started "+new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),
+      generated:new Date().toISOString().slice(0,10), updated:new Date().toISOString(), schema:1, sources:[], items };
+    const fh=await entry.dir.getFileHandle("todo-state.json",{create:true});
+    const w=await fh.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close();
+    await loadAll(); location.hash="week/"+encodeURIComponent(entry.name); route();
+  }catch(e){ console.error(e); s("✗ "+(e.message||e)); document.querySelectorAll('.ingbtn').forEach(b=>b.disabled=false); }
 }
 function renderHome(){
   const banner=pendingBanner();
   if(!app.weeks.length){
-    $('app').innerHTML=`<h1>Weekly To-Do</h1><div class="crumbs">Home</div>`+banner+
-      (app.pending.length?"":`<div class="empty">Connected, but no weeks yet. Drop a week's notes into a <strong>WO-YYMMDD</strong> folder and it'll show up here to ingest.</div>`);
+    $('app').innerHTML=`<div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><h1>Weekly To-Do</h1><div class="crumbs">Home</div></div>${canMakeFolders()?'<button class="add" id="newWeekBtn" title="Create the next Monday\'s WO- folder and start it with last week\'s open items">+ New week</button>':""}</div>`+banner+
+      (app.pending.length?"":`<div class="empty">Connected, but no weeks yet. Click <strong>+ New week</strong>, or drop a week's notes into a <strong>WO-YYMMDD</strong> folder and it'll show up here.</div>`);
     bindIngest(); return;
   }
   const cur=app.weeks[0], earlier=app.weeks.slice(1);
   const s=stats(cur);
-  let html=`<h1>Weekly To-Do</h1><div class="crumbs">Home</div>`+banner+`
+  let html=`<div style="display:flex;align-items:flex-start;gap:12px"><div style="flex:1"><h1>Weekly To-Do</h1><div class="crumbs">Home</div></div>${canMakeFolders()?'<button class="add" id="newWeekBtn" title="Create the next Monday\'s WO- folder and start it with last week\'s open items">+ New week</button>':""}</div>`+banner+`
   <div class="hero">
     <div class="left">
       <span class="tag">This week</span>
@@ -1318,12 +1360,7 @@ async function ingestWeek(entry){
       messages:[{role:"user", content:[{type:"text",text:`Week ${entry.name} (${lbl}). Source material:`}, ...blocks]}]});
     let items=toolItemsToNormalized(itemsFromResponse(j), "AI-extracted ("+apiModel()+")");
     const newCount=items.length;
-    if(prior){
-      prior.items.filter(i=>!i.dismissed && !i.done && i.plan!=="Not doing").forEach(i=>{
-        items.push(Object.assign({}, i, {carriedFrom:prior.week, carryAge:(i.carryAge||0)+1, plan:"", dismissed:null,
-          subtasks:(i.subtasks||[]).map(st=>Object.assign({},st))}));
-      });
-    }
+    if(prior) items.push(...carriedItems(prior));
     s("Writing todo-state.json…");
     const state={ week:entry.name, label:lbl, dates:"Ingested "+new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),
       generated:new Date().toISOString().slice(0,10), updated:new Date().toISOString(), schema:1, sources:srcNames, items };

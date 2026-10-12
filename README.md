@@ -24,7 +24,8 @@ your week-prep folder/
 1. **Connect** — open `Home.html` in Chrome or Edge and connect it to your folder (it uses the File System Access API to read and write directly; nothing is uploaded anywhere by connecting).
 2. **Ingest** — when a `WO-YYMMDD` folder has source files but no to-do list yet, an *Ingest* banner appears. One click sends that folder's contents to Claude, which extracts the action items that are yours to act on, tags them with your themes/projects, and writes `todo-state.json`. Open items from the previous week are carried over automatically (with a ↩ badge and age counter).
 3. **Work the week** — check things off, set a plan day (Mon–Fri), add subtasks, notes, and manual items. Everything saves back to `todo-state.json` as you type, so it syncs wherever your folder syncs (OneDrive, Dropbox, iCloud…).
-4. **Re-scan** — dropped in more emails on Wednesday? Hit **⟳ Re-scan week**: it reads only the files added since the last scan and asks Claude for genuinely new items — it won't duplicate what's on the list or resurrect items you removed.
+4. **Weeks without emails** — click **+ New week** (creates the correctly-named Monday folder) or **Start … empty** on a folder you made yourself: the week opens with last week's open items carried over and nothing else, ready for manual entry or the Assistant. Drop files in later and Re-scan picks them up. The app also warns when a folder's date isn't a Monday or is far from today — a typo'd date silently files the week in the wrong place.
+5. **Re-scan** — dropped in more emails on Wednesday? Hit **⟳ Re-scan week**: it reads only the files added since the last scan and asks Claude for genuinely new items — it won't duplicate what's on the list or resurrect items you removed.
 
 ## Features
 
